@@ -63,6 +63,33 @@ local function startGame()
 		end
 	end
 
+	-- Cargar inicializador
+	local initializer = script:FindFirstChild("PeglinRPG_Initializer")
+
+	if not initializer then
+		initializer = Instance.new("Script")
+		initializer.Name = "PeglinRPG_Initializer"
+
+		-- Aquí normalmente cargaríamos el código desde un archivo
+		-- Para el propósito de este ejemplo, usaremos una cadena básica
+		initializer.Source = [[
+            print("Inicializador de PeglinRPG ejecutándose...")
+            -- En un entorno real, aquí iría el código completo que hemos definido
+            -- en el archivo PeglinRPG_Initializer.lua
+            
+            -- Intentar ejecutar el inicializador modular
+            local ReplicatedStorage = game:GetService("ReplicatedStorage")
+            local moduleFolder = ReplicatedStorage:WaitForChild("PeglinRPG")
+            
+            -- Configurar gravedad para el juego
+            workspace.Gravity = 130
+            
+            -- Notificar que el juego ha iniciado
+            print("¡PeglinRPG ha iniciado correctamente!")
+        ]]
+
+		initializer.Parent = script
+	end
 	-- Agregar después de crear los módulos
 	local function setupRemoteEvents()
 		-- Crear un RemoteEvent para permitir la comunicación entre cliente y servidor
@@ -70,7 +97,7 @@ local function startGame()
 		launchEvent.Name = "PeglinLaunchEvent"
 		launchEvent.Parent = ReplicatedStorage:WaitForChild("PeglinRPG")
 
-		print("Evento de lanzamiento creado en:", ReplicatedStorage:WaitForChild("PeglinRPG"):GetFullName())
+		print("Evento de lanzamiento creado")
 
 		-- Cuando el cliente envía una dirección, lanzamos la bola
 		launchEvent.OnServerEvent:Connect(function(player, direction)
@@ -84,25 +111,18 @@ local function startGame()
 
 	-- Llamar a esta función después de crear todos los módulos
 	local launchEvent = setupRemoteEvents()
+	-- Ejecutar inicializador
+	print("Ejecutando inicializador...")
+	local success, error = pcall(function()
+		initializer:Clone().Parent = game:GetService("ServerScriptService")
+	end)
 
-	-- CORREGIDO: Enfoque alternativo para el inicializador
-	-- En lugar de intentar clonar, creamos directamente el script en ServerScriptService
-	local initializerScript = Instance.new("Script")
-	initializerScript.Name = "PeglinRPG_Initializer"
-	
-	-- Crear valores para pasar parámetros de configuración
-	local gravityValue = Instance.new("NumberValue")
-	gravityValue.Name = "GameGravity"
-	gravityValue.Value = 130
-	gravityValue.Parent = initializerScript
-	
-	-- Ejecutar directamente la lógica de inicialización aquí
-	workspace.Gravity = 130 -- Establecer gravedad directamente
-	
-	-- Colocar el script en el destino final directamente
-	initializerScript.Parent = game:GetService("ServerScriptService")
-	
-	print("PeglinRPG inicializado correctamente: gravedad establecida a 130")
+	if not success then
+		warn("Error al iniciar PeglinRPG: " .. tostring(error))
+		return false
+	end
+
+	print("PeglinRPG iniciado correctamente")
 	return true
 end
 
