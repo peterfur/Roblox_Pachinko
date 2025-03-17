@@ -123,28 +123,118 @@ local function setupCamera()
 end
 
 -- Manejar interacciones del usuario
+-- Modificación para el archivo PeglinClient.client.lua para mejorar la detección de clics
+
+-- Función para manejar los clics y el lanzamiento de orbes
 local function setupInputHandling(launchEvent)
-	-- Manejar el lanzamiento de la pelota con el mouse
-	UserInputService.InputBegan:Connect(function(input, gameProcessed)
-		if gameProcessed then return end
-
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			-- Obtener dirección de lanzamiento
-			local mousePos = UserInputService:GetMouseLocation()
-			local viewportSize = workspace.CurrentCamera.ViewportSize
-
-			-- Convertir posición del mouse a un vector de dirección
-			local dirX = (mousePos.X - viewportSize.X/2) / 100
-			local direction = Vector3.new(dirX, -1, 0).Unit
-
-			print("Enviando dirección de lanzamiento:", direction)
-
-			-- Enviar la dirección al servidor
-			launchEvent:FireServer(direction)
-		end
-	end)
-
-	print("Controlador de entrada configurado")
+    -- Variables para el estado de lanzamiento
+    local isReadyToLaunch = true
+    local lastLaunchTime = 0
+    local launchCooldown = 1 -- Tiempo en segundos entre lanzamientos
+    
+    -- Añadir indicador visual de lanzamiento
+    local function createLaunchIndicator()
+        -- Crear un indicador visual que muestre que se puede lanzar
+        local launchReady = Instance.new("ScreenGui")
+        launchReady.Name = "PeglinLaunchIndicator"
+        
+        local readyFrame = Instance.new("Frame")
+        readyFrame.Size = UDim2.new(0, 200, 0, 50)
+        readyFrame.Position = UDim2.new(0.5, -100, 0.05, 0)
+        readyFrame.BackgroundColor3 = Color3.fromRGB(40, 120, 40)
+        readyFrame.BackgroundTransparency = 0.3
+        readyFrame.BorderSizePixel = 2
+        readyFrame.Parent = launchReady
+        
+        local readyText = Instance.new("TextLabel")
+        readyText.Size = UDim2.new(1, 0, 1, 0)
+        readyText.BackgroundTransparency = 1
+        readyText.TextColor3 = Color3.fromRGB(255, 255, 255)
+        readyText.Font = Enum.Font.SourceSansBold
+        readyText.TextSize = 18
+        readyText.Text = "¡HAGA CLIC PARA LANZAR!"
+        readyText.Parent = readyFrame
+        
+        launchReady.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+        
+        return launchReady, readyText
+    end
+    
+    local launchIndicator, indicatorText = createLaunchIndicator()
+    
+    -- Actualizar el indicador de lanzamiento
+    local function updateLaunchIndicator()
+        if isReadyToLaunch then
+            indicatorText.Text = "¡HAGA CLIC PARA LANZAR!"
+            launchIndicator.Enabled = true
+        else
+            local timeLeft = math.max(0, launchCooldown - (tick() - lastLaunchTime))
+            if timeLeft > 0 then
+                indicatorText.Text = "Preparando siguiente orbe... " .. string.format("%.1f", timeLeft)
+            else
+                isReadyToLaunch = true
+                indicatorText.Text = "¡HAGA CLIC PARA LANZAR!"
+            end
+        end
+    end
+    
+    -- Iniciar bucle de actualización
+    spawn(function()
+        while wait(0.1) do
+            updateLaunchIndicator()
+        end
+    end)
+    
+    -- Manejar el clic tanto con el mouse como con toque móvil
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        
+        local isValidInput = 
+            input.UserInputType == Enum.UserInputType.MouseButton1 or 
+            input.UserInputType == Enum.UserInputType.Touch
+        
+        if isValidInput and isReadyToLaunch then
+            -- Obtener posición del clic
+            local inputPosition
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                inputPosition = UserInputService:GetMouseLocation()
+            else
+                inputPosition = input.Position
+            end
+            
+            -- Convertir posición a un vector de dirección
+            local viewportSize = workspace.CurrentCamera.ViewportSize
+            local centerX = viewportSize.X/2
+            local centerY = viewportSize.Y/2
+            
+            -- Calcular dirección relativa al centro
+            local dirX = (inputPosition.X - centerX) / 100
+            local dirY = (inputPosition.Y - centerY) / 100
+            
+            -- Mantener un componente vertical negativo para que siempre vaya hacia arriba al inicio
+            local direction = Vector3.new(dirX, -1, 0).Unit
+            
+            print("Enviando dirección de lanzamiento:", direction)
+            
+            -- Enviar dirección al servidor
+            launchEvent:FireServer(direction)
+            
+            -- Actualizar estado de lanzamiento
+            isReadyToLaunch = false
+            lastLaunchTime = tick()
+            
+            -- Ocultar el indicador por un momento
+            launchIndicator.Enabled = false
+            
+            -- Programar comprobación para volver a activar el lanzamiento
+            spawn(function()
+                wait(launchCooldown)
+                isReadyToLaunch = true
+            end)
+        end
+    end)
+    
+    print("Controlador de entrada mejorado configurado")
 end
 
 -- Función principal

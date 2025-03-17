@@ -212,6 +212,7 @@ function CombatManager:animatePegHit(pegPart, damageType)
 end
 
 -- Maneja la victoria sobre un enemigo
+-- Modificación para mejorar la función handleVictory
 function CombatManager:handleVictory()
 	print("¡Victoria sobre el enemigo!")
 
@@ -254,6 +255,28 @@ function CombatManager:handleVictory()
 
 		victoryMessage:Destroy()
 	end)
+
+	-- Animación de desvanecimiento para el enemigo
+	if gm.visualElements.enemyModel then
+		spawn(function()
+			local enemyParts = {}
+			for _, part in pairs(gm.visualElements.enemyModel:GetDescendants()) do
+				if part:IsA("BasePart") then
+					table.insert(enemyParts, part)
+				end
+			end
+
+			-- Animar desvanecimiento
+			for transparency = 0, 1, 0.1 do
+				for _, part in ipairs(enemyParts) do
+					if part.Transparency < 1 then -- No afectar a partes ya transparentes
+						part.Transparency = transparency
+					end
+				end
+				wait(0.05)
+			end
+		end)
+	end
 
 	-- Esperar un momento antes de mostrar recompensas
 	wait(3)

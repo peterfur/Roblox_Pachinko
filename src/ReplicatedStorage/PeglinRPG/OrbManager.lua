@@ -91,7 +91,7 @@ function OrbManager:createOrbInstance(orbType)
 	return orbInstance
 end
 
--- Crea un objeto visual para un orbe
+-- Corrección de la función createOrbVisual para eliminar la propiedad MaxVelocity que no existe
 function OrbManager:createOrbVisual(orbInstance, position)
 	-- Crear parte física
 	local ball = Instance.new("Part")
@@ -104,16 +104,21 @@ function OrbManager:createOrbVisual(orbInstance, position)
 	ball.Color = color
 	ball.Material = Enum.Material.Neon
 
-	-- Propiedades físicas
+	-- Propiedades físicas - Ajustadas para mantener el orbe dentro del panel
 	ball.Anchored = false
 	ball.CanCollide = true
+	
+	-- Modificar propiedades físicas para mantener el orbe más controlado
 	ball.CustomPhysicalProperties = PhysicalProperties.new(
-		1.2,   -- Densidad
-		0.3,   -- Fricción
-		0.8,   -- Elasticidad
-		0.4,   -- Peso
-		0.5    -- Fricción rotacional
+		1.5,   -- Densidad (aumentada)
+		0.4,   -- Fricción (aumentada)
+		0.7,   -- Elasticidad (reducida)
+		0.6,   -- Peso (aumentado)
+		0.6    -- Fricción rotacional (aumentada)
 	)
+
+	-- Quitar la línea problemática que usa MaxVelocity que no existe en Roblox Parts
+	-- ball.MaxVelocity = 50  -- Esta línea es la que causa el error
 
 	-- Efectos visuales según tipo
 	if orbInstance.type == "FIRE" then

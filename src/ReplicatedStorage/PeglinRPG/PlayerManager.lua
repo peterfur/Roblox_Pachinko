@@ -20,10 +20,12 @@ function PlayerManager.new()
 		gold = 0,
 	}
 
-	-- Inventario del jugador
+	-- Inventario del jugador con orbes variados desde el principio
 	self.inventory = {
 		orbs = {
-			{type = "BASIC", count = Config.COMBAT.MAX_BALLS_PER_TURN}
+			{type = "BASIC", count = 3},
+			{type = "FIRE", count = 1},  -- Agregar un orbe de fuego inicialmente
+			{type = "ICE", count = 1}    -- Agregar un orbe de hielo inicialmente
 		},
 		relics = {},
 		consumables = {}

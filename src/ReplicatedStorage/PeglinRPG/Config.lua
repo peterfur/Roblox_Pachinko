@@ -23,10 +23,10 @@ Config.PHYSICS = {
 
 -- Configuración del tablero
 Config.BOARD = {
-	WIDTH = 40,
-	HEIGHT = 50,
-	DEFAULT_PEG_COUNT = 60,
-	MIN_PEG_DISTANCE = 3.5,
+	WIDTH = 60,
+	HEIGHT = 70,
+	DEFAULT_PEG_COUNT = 120,
+	MIN_PEG_DISTANCE = 3.2,
 }
 
 -- Configuración del combate

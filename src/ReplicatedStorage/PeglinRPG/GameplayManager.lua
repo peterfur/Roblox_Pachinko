@@ -95,8 +95,21 @@ function GameplayManager:startNewGame()
 end
 
 -- Configura un nuevo encuentro
+-- Modificación de la función setupEncounter para asegurar la creación de un nuevo enemigo
 function GameplayManager:setupEncounter()
 	print("Configurando encuentro:", self.gameState.currentEncounter)
+
+	-- Limpiar el enemigo anterior si existe
+	if self.visualElements.enemyModel then
+		self.visualElements.enemyModel:Destroy()
+		self.visualElements.enemyModel = nil
+	end
+
+	-- Limpiar el tablero anterior si existe
+	if self.visualElements.boardModel then
+		self.visualElements.boardModel:Destroy()
+		self.visualElements.boardModel = nil
+	end
 
 	-- Determinar si es un jefe
 	local isBoss = self.gameState.currentEncounter == self.playerManager.progression.totalEncounters
@@ -104,7 +117,7 @@ function GameplayManager:setupEncounter()
 	-- Obtener configuración del nivel actual
 	local levelConfig = Config.LEVELS[self.playerManager.progression.currentLevel]
 
-	-- Generar enemigo
+	-- Generar enemigo (crear un nuevo enemigo para cada encuentro)
 	if isBoss then
 		self.enemyManager = EnemyManager.new(levelConfig.BOSS, true)
 	else
@@ -152,8 +165,26 @@ function GameplayManager:changePhase(newPhase)
 end
 
 -- Maneja el lanzamiento de un orbe
+-- Modificación de la función launchOrb en GameplayManager para hacerla más robusta
+
 function GameplayManager:launchOrb(direction)
-	if self.gameState.currentPhase ~= "PLAYER_TURN" or not self.visualElements.currentOrbVisual then
+	-- Verificar si estamos en la fase correcta y si hay un orbe visual
+	if self.gameState.currentPhase ~= "PLAYER_TURN" then
+		print("No se puede lanzar el orbe: No es el turno del jugador (fase actual: " .. self.gameState.currentPhase .. ")")
+		return false
+	end
+	
+	if not self.visualElements.currentOrbVisual then
+		print("No se puede lanzar el orbe: No hay un orbe visual disponible")
+		
+		-- Intentar recuperar si hay un nuevo orbe disponible
+		if #self.orbManager.orbPoolForBattle > 0 then
+			print("Intentando seleccionar nuevo orbe...")
+			self.phaseManager:startPlayerTurn()
+		else
+			print("No hay más orbes disponibles")
+		end
+		
 		return false
 	end
 
@@ -167,8 +198,21 @@ function GameplayManager:launchOrb(direction)
 	local normalizedDir = direction.Unit
 	local initialVelocity = normalizedDir * Config.PHYSICS.BALL_SPEED
 
+	-- Añadir un pequeño componente aleatorio para más variedad
+	local randomFactor = 0.05 -- Factor aleatorio pequeño
+	local randomOffset = Vector3.new(
+		(math.random() * 2 - 1) * randomFactor,
+		(math.random() * 2 - 1) * randomFactor,
+		0
+	)
+	
+	initialVelocity = initialVelocity + randomOffset
+
 	-- Aplicar fuerza al orbe
 	orbVisual:ApplyImpulse(initialVelocity * orbVisual:GetMass())
+	
+	-- Añadir un pequeño torque (giro) para comportamiento más realista
+	orbVisual:ApplyAngularImpulse(Vector3.new(math.random(-5, 5), math.random(-5, 5), math.random(-5, 5)))
 
 	-- Disparar eventos
 	for _, callback in ipairs(self.events.onOrbLaunched) do
@@ -183,6 +227,28 @@ function GameplayManager:launchOrb(direction)
 
 	-- Actualizar UI
 	self.uiManager:updateUI()
+
+	-- Añadir efecto visual de lanzamiento
+	local launchEffect = Instance.new("Part")
+	launchEffect.Shape = Enum.PartType.Ball
+	launchEffect.Size = Vector3.new(1, 1, 1)
+	launchEffect.Position = orbVisual.Position
+	launchEffect.Anchored = true
+	launchEffect.CanCollide = false
+	launchEffect.Transparency = 0.5
+	launchEffect.Material = Enum.Material.Neon
+	launchEffect.Color = orbVisual.Color
+	launchEffect.Parent = workspace
+	
+	-- Animar el efecto de lanzamiento
+	spawn(function()
+		for i = 1, 10 do
+			launchEffect.Size = Vector3.new(1 + i*0.3, 1 + i*0.3, 1 + i*0.3)
+			launchEffect.Transparency = 0.5 + (i * 0.05)
+			wait(0.03)
+		end
+		launchEffect:Destroy()
+	end)
 
 	return true
 end

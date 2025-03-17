@@ -17,7 +17,7 @@ function RewardManager.new(gameplayManager)
 	return self
 end
 
--- Da recompensas al jugador después de una victoria
+-- Modificación de la función giveRewards para manejar la transición de enemigos
 function RewardManager:giveRewards()
 	local gm = self.gameplayManager
 
@@ -167,9 +167,16 @@ function RewardManager:giveRewards()
 	continueButton.Text = "Continuar"
 	continueButton.Parent = rewardPanel
 
-	-- Funcionalidad del botón
+	-- Funcionalidad del botón - Eliminar el enemigo actual antes de continuar
 	continueButton.MouseButton1Click:Connect(function()
 		rewardScreen:Destroy()
+		
+		-- Eliminar el modelo del enemigo si existe
+		if gm.visualElements.enemyModel and gm.visualElements.enemyModel.Parent then
+			gm.visualElements.enemyModel:Destroy()
+			gm.visualElements.enemyModel = nil
+			gm.enemyManager = nil
+		end
 	end)
 
 	-- Mostrar pantalla
