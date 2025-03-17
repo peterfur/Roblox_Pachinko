@@ -181,11 +181,9 @@ print("PeglinClient iniciando desde script copiado...")
 		print("Scripts configurados para el jugador: " .. player.Name)
 	end)
 	
-	-- Iniciar el juego invocando el módulo GameplayManager
 	local success, result = pcall(function()
 		local gameManager = require(moduleFolder:WaitForChild("GameplayManager")).new()
-		-- Opcionalmente inicia el juego automáticamente
-		-- gameManager:startNewGame()
+		gameManager:startNewGame()
 		return true
 	end)
 	

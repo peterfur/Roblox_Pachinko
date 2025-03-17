@@ -191,5 +191,20 @@ Config.LEVELS = {
 		BOSS = "NECROMANCER",
 	},
 }
-
+Config.PEG_TYPES = {
+    STANDARD = {
+        SIZE = Vector3.new(0.5, 2, 0.5),
+        MAX_HITS = 2
+    },
+    BALL = {
+        SIZE = Vector3.new(1, 1, 1),  -- Tamaño de la clavija esférica
+        SPAWN_CHANCE = 20,  -- 20% de probabilidad de ser esférica
+        BOUNCE_BONUS = 1.2,  -- Bonus de rebote para clavijas esféricas
+        MAX_HITS = 2
+    },
+    BUMPER = {
+        DAMAGE_MULTIPLIER = 1.5,
+        MAX_HITS = 1
+    }
+}
 return Config
