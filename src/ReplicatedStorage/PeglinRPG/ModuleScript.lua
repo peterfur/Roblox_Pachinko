@@ -107,13 +107,13 @@ function OrbManager:createOrbVisual(orbInstance, position)
 	-- Propiedades físicas
 	ball.Anchored = false
 	ball.CanCollide = true
-	ball.CustomPhysicalProperties = PhysicalProperties.new(
-		1.2,   -- Densidad
-		0.3,   -- Fricción
-		0.8,   -- Elasticidad
-		0.4,   -- Peso
-		0.5    -- Fricción rotacional
-	)
+    ball.CustomPhysicalProperties = PhysicalProperties.new(
+        1.8,   -- Densidad (aumentada)
+        0.3,   -- Fricción (moderada)
+        0.6,   -- Elasticidad (reducida para menos rebotes extremos)
+        0.8,   -- Peso (aumentado)
+        0.6    -- Fricción rotacional (aumentada)
+    )
 
 	-- Efectos visuales según tipo
 	if orbInstance.type == "FIRE" then

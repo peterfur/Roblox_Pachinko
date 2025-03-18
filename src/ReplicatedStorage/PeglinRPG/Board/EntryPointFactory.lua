@@ -15,110 +15,66 @@ function EntryPointFactory.new(boardManager)
 	return self
 end
 
--- Crea el punto de entrada para la bola
-function EntryPointFactory:createEntryPoint(position, parent, theme)
-	-- Base
-	local base = Instance.new("Part")
-	base.Shape = Enum.PartType.Cylinder
-	base.Size = Vector3.new(5, 5, 5)
-	base.CFrame = CFrame.new(position) * CFrame.Angles(0, 0, math.rad(90))
-
-	if theme == "FOREST" then
-		base.BrickColor = BrickColor.new("Dark green")
-		base.Material = Enum.Material.Grass
-	elseif theme == "DUNGEON" then
-		base.BrickColor = BrickColor.new("Dark stone grey")
-		base.Material = Enum.Material.Slate
-	else
-		base.BrickColor = BrickColor.new("Medium stone grey")
-		base.Material = Enum.Material.SmoothPlastic
-	end
-
-	base.Anchored = true
-	base.CanCollide = true
-	base.Parent = parent
-
-	-- Indicador visual mejorado
-	local indicator = Instance.new("Part")
-	indicator.Shape = Enum.PartType.Ball
-	indicator.Size = Vector3.new(3, 3, 3)
-	indicator.Position = Vector3.new(position.X, position.Y, position.Z + 1)
-	indicator.BrickColor = BrickColor.new("Lime green")
-	indicator.Material = Enum.Material.Neon
-	indicator.Transparency = 0.5
-	indicator.Anchored = true
-	indicator.CanCollide = false
-	indicator.Parent = parent
-
-	-- Añadir luz
-	local light = Instance.new("PointLight")
-	light.Brightness = 2
-	light.Color = Color3.fromRGB(100, 255, 100)
-	light.Range = 5
-	light.Parent = indicator
-	
-	-- Añadir efectos de partículas
-	local attachment = Instance.new("Attachment")
-	attachment.Parent = indicator
-	
-	local particles = Instance.new("ParticleEmitter")
-	particles.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 255, 100)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(50, 200, 50))
-	})
-	particles.Size = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.5),
-		NumberSequenceKeypoint.new(0.5, 0.25),
-		NumberSequenceKeypoint.new(1, 0)
-	})
-	particles.Lifetime = NumberRange.new(0.5, 1)
-	particles.Rate = 20
-	particles.Speed = NumberRange.new(1, 2)
-	particles.SpreadAngle = Vector2.new(180, 180)
-	particles.Parent = attachment
-
-	-- Etiqueta "LANZA AQUÍ" mejorada
-	local billboard = Instance.new("BillboardGui")
-	billboard.Size = UDim2.new(0, 120, 0, 40)
-	billboard.StudsOffset = Vector3.new(0, 2.5, 0)
-	billboard.Adornee = indicator
-	billboard.AlwaysOnTop = true
-
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.new(1, 0, 1, 0)
-	label.BackgroundTransparency = 0.5
-	label.BackgroundColor3 = Color3.fromRGB(0, 50, 0)
-	label.TextColor3 = Color3.fromRGB(255, 255, 255)
-	label.Font = Enum.Font.GothamBold
-	label.TextSize = 16
-	label.Text = "¡LANZA AQUÍ!"
-	label.Parent = billboard
-
-	billboard.Parent = indicator
-	
-	-- Añadir animación al indicador
-	spawn(function()
-		while indicator and indicator.Parent do
-			for i = 1, 20 do
-				if not indicator or not indicator.Parent then break end
-				
-				-- Pulsar suavemente
-				indicator.Size = Vector3.new(3 + math.sin(i/3) * 0.5, 3 + math.sin(i/3) * 0.5, 3 + math.sin(i/3) * 0.5)
-				
-				-- Girar lentamente
-				billboard.StudsOffset = Vector3.new(math.sin(i/10) * 0.3, 2.5 + math.sin(i/5) * 0.2, 0)
-				
-				wait(0.05)
-			end
-		end
-	end)
-	
-	-- Añadir vías de guía si está configurado
-	if Config.BOARD.ADD_LAUNCH_GUIDES then
-		self:createLaunchGuides(position, parent, theme)
-	end
-	
-	return indicator
+function EntryPointFactory:createEntryPoints(parent, width, height, theme)
+    local entryPoints = {}
+    
+    -- Posiciones mejoradas para los tres tubos - más centrados y no tan cerca de los bordes
+    local positions = {
+        Vector3.new(-width/6, height/2 - 6, 0),  -- Izquierda
+        Vector3.new(0, height/2 - 6, 0),         -- Centro (un poco más abajo)
+        Vector3.new(width/6, height/2 - 6, 0)    -- Derecha
+    }
+    
+    for i, position in ipairs(positions) do
+        -- Base del tubo
+        local base = Instance.new("Part")
+        base.Shape = Enum.PartType.Cylinder
+        base.Size = Vector3.new(5, 5, 5)
+        -- Orientar correctamente el tubo para que apunte hacia abajo
+        base.CFrame = CFrame.new(position) * CFrame.Angles(math.rad(90), 0, 0)
+        
+        if theme == "FOREST" then
+            base.BrickColor = BrickColor.new("Dark green")
+            base.Material = Enum.Material.Grass
+        elseif theme == "DUNGEON" then
+            base.BrickColor = BrickColor.new("Dark stone grey")
+            base.Material = Enum.Material.Slate
+        else
+            base.BrickColor = BrickColor.new("Medium stone grey")
+            base.Material = Enum.Material.SmoothPlastic
+        end
+        
+        base.Anchored = true
+        base.CanCollide = true
+        base.Parent = parent
+        
+        -- Indicador visual
+        local indicator = Instance.new("Part")
+        indicator.Shape = Enum.PartType.Ball
+        indicator.Size = Vector3.new(3, 3, 3)
+        indicator.Position = Vector3.new(position.X, position.Y, position.Z + 1)
+        indicator.BrickColor = BrickColor.new("Lime green")
+        indicator.Material = Enum.Material.Neon
+        indicator.Transparency = 0.5
+        indicator.Anchored = true
+        indicator.CanCollide = false
+        
+        -- Guardar posición y orientación para el lanzamiento
+        indicator:SetAttribute("LaunchPosition", position)
+        indicator:SetAttribute("EntryPointIndex", i)
+        
+        indicator.Parent = parent
+        table.insert(entryPoints, indicator)
+        
+        -- Añadir luz
+        local light = Instance.new("PointLight")
+        light.Brightness = 2
+        light.Color = Color3.fromRGB(100, 255, 100)
+        light.Range = 5
+        light.Parent = indicator
+    end
+    
+    return entryPoints
 end
 
 -- Crea guías visuales para ayudar a apuntar al lanzar

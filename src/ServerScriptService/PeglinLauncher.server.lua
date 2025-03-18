@@ -76,21 +76,26 @@ local function startGame()
 			-- Intentar obtener el GameplayManager y lanzar el orbe
 			local success, err = pcall(function()
 				local GameplayManager = require(moduleFolder:WaitForChild("GameplayManager", 5))
-
+		
 				-- Verificar si hay una instancia activa
 				if _G.currentGameManager then
-					print("GameplayManager encontrado, lanzando orbe con dirección:", direction)
-					_G.currentGameManager:launchOrb(direction)
+					if direction then
+						print("GameplayManager encontrado, lanzando orbe con dirección:", direction)
+						_G.currentGameManager:launchOrb(direction)
+					else
+						print("GameplayManager encontrado, lanzando orbe de manera aleatoria")
+						_G.currentGameManager:launchOrb()
+					end
 				else
 					-- Crear nueva instancia si no existe
 					local gameManager = GameplayManager.new()
 					_G.currentGameManager = gameManager
 					print("Creada nueva instancia de GameplayManager, lanzando orbe")
 					gameManager:startNewGame()
-					gameManager:launchOrb(direction)
+					gameManager:launchOrb()
 				end
 			end)
-
+		
 			if not success then
 				warn("Error al procesar evento de lanzamiento:", err)
 			end
@@ -200,3 +205,16 @@ end
 
 -- Iniciar el juego
 startGame()
+
+-- Después de intentar iniciar el juego
+local success, result = pcall(function()
+    print("Intentando crear GameplayManager...")
+    local GameplayManager = require(moduleFolder:WaitForChild("GameplayManager"))
+    print("GameplayManager cargado, creando instancia...")
+    local gameManager = GameplayManager.new()
+    print("GameplayManager creado, iniciando juego...")
+    _G.currentGameManager = gameManager
+    gameManager:startNewGame()
+    print("Juego iniciado correctamente")
+    return true
+end)

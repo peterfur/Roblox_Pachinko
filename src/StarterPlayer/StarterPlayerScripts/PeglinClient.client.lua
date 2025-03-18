@@ -139,8 +139,8 @@ local function setupInputHandling(launchEvent)
         launchReady.Name = "PeglinLaunchIndicator"
         
         local readyFrame = Instance.new("Frame")
-        readyFrame.Size = UDim2.new(0, 200, 0, 50)
-        readyFrame.Position = UDim2.new(0.5, -100, 0.05, 0)
+        readyFrame.Size = UDim2.new(0, 300, 0, 50)
+        readyFrame.Position = UDim2.new(0.5, -150, 0.05, 0)
         readyFrame.BackgroundColor3 = Color3.fromRGB(40, 120, 40)
         readyFrame.BackgroundTransparency = 0.3
         readyFrame.BorderSizePixel = 2
@@ -152,7 +152,7 @@ local function setupInputHandling(launchEvent)
         readyText.TextColor3 = Color3.fromRGB(255, 255, 255)
         readyText.Font = Enum.Font.SourceSansBold
         readyText.TextSize = 18
-        readyText.Text = "¡HAGA CLIC PARA LANZAR!"
+        readyText.Text = "¡HAGA CLIC PARA LANZAR DESDE UN TUBO ALEATORIO!"
         readyText.Parent = readyFrame
         
         launchReady.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
@@ -165,7 +165,7 @@ local function setupInputHandling(launchEvent)
     -- Actualizar el indicador de lanzamiento
     local function updateLaunchIndicator()
         if isReadyToLaunch then
-            indicatorText.Text = "¡HAGA CLIC PARA LANZAR!"
+            indicatorText.Text = "¡HAGA CLIC PARA LANZAR DESDE UN TUBO ALEATORIO!"
             launchIndicator.Enabled = true
         else
             local timeLeft = math.max(0, launchCooldown - (tick() - lastLaunchTime))
@@ -173,7 +173,7 @@ local function setupInputHandling(launchEvent)
                 indicatorText.Text = "Preparando siguiente orbe... " .. string.format("%.1f", timeLeft)
             else
                 isReadyToLaunch = true
-                indicatorText.Text = "¡HAGA CLIC PARA LANZAR!"
+                indicatorText.Text = "¡HAGA CLIC PARA LANZAR DESDE UN TUBO ALEATORIO!"
             end
         end
     end
@@ -194,30 +194,9 @@ local function setupInputHandling(launchEvent)
             input.UserInputType == Enum.UserInputType.Touch
         
         if isValidInput and isReadyToLaunch then
-            -- Obtener posición del clic
-            local inputPosition
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                inputPosition = UserInputService:GetMouseLocation()
-            else
-                inputPosition = input.Position
-            end
-            
-            -- Convertir posición a un vector de dirección
-            local viewportSize = workspace.CurrentCamera.ViewportSize
-            local centerX = viewportSize.X/2
-            local centerY = viewportSize.Y/2
-            
-            -- Calcular dirección relativa al centro
-            local dirX = (inputPosition.X - centerX) / 100
-            local dirY = (inputPosition.Y - centerY) / 100
-            
-            -- Mantener un componente vertical negativo para que siempre vaya hacia arriba al inicio
-            local direction = Vector3.new(dirX, -1, 0).Unit
-            
-            print("Enviando dirección de lanzamiento:", direction)
-            
-            -- Enviar dirección al servidor
-            launchEvent:FireServer(direction)
+            -- Simplemente enviar un evento de lanzamiento sin dirección
+            print("Enviando evento de lanzamiento aleatorio")
+            launchEvent:FireServer()
             
             -- Actualizar estado de lanzamiento
             isReadyToLaunch = false
@@ -234,7 +213,7 @@ local function setupInputHandling(launchEvent)
         end
     end)
     
-    print("Controlador de entrada mejorado configurado")
+    print("Controlador de entrada aleatorio configurado")
 end
 
 -- Función principal

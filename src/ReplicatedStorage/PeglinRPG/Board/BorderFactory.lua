@@ -15,77 +15,94 @@ function BorderFactory.new(boardManager)
 	return self
 end
 
--- Crea los bordes del tablero y paneles de cristal
 function BorderFactory:createBorders(board, width, height, theme)
-	-- Determinar apariencia según tema
-	local borderColor
-	local borderMaterial
+    -- Determinar apariencia según tema
+    local borderColor
+    local borderMaterial
 
-	if theme == "FOREST" then
-		borderColor = BrickColor.new("Reddish brown")
-		borderMaterial = Enum.Material.Wood
-	elseif theme == "DUNGEON" then
-		borderColor = BrickColor.new("Dark stone grey")
-		borderMaterial = Enum.Material.Slate
-	else
-		borderColor = BrickColor.new("Medium stone grey")
-		borderMaterial = Enum.Material.SmoothPlastic
-	end
+    -- Asegurar que theme siempre tenga un valor válido
+    theme = theme or "FOREST" -- Valor predeterminado si theme es nil
 
-	-- Crear bordes
-	local function createBorder(position, size, isGlass)
-		local border = Instance.new("Part")
-		border.Size = size
-		border.Position = position
-		
-		if isGlass then
-			border.BrickColor = BrickColor.new("Institutional white")
-			border.Material = Enum.Material.Glass
-			border.Transparency = 0.7
-			-- IMPORTANTE: Hacer que el cristal no bloquee los raycast ni los clics
-			border.CanCollide = true     -- Aún colisiona con el orbe
-			border.CanQuery = false      -- No intercepta raycast para clics
-		else
-			border.BrickColor = borderColor
-			border.Material = borderMaterial
-			border.CanCollide = true
-		end
-		
-		border.Anchored = true
+    if theme == "FOREST" then
+        borderColor = BrickColor.new("Reddish brown")
+        borderMaterial = Enum.Material.Wood
+    elseif theme == "DUNGEON" then
+        borderColor = BrickColor.new("Dark stone grey")
+        borderMaterial = Enum.Material.Slate
+    else
+        borderColor = BrickColor.new("Medium stone grey")
+        borderMaterial = Enum.Material.SmoothPlastic
+    end
 
-		-- Propiedades físicas personalizadas para los bordes
-		border.CustomPhysicalProperties = PhysicalProperties.new(
-			1,    -- Densidad
-			0.3,  -- Fricción
-			0.6,  -- Elasticidad
-			1,    -- Peso
-			0.5   -- Fricción rotacional
-		)
+    -- Definir la función createBorder aquí, antes de usarla
+    local function createBorder(position, size, isGlass)
+        local border = Instance.new("Part")
+        border.Size = size
+        border.Position = position
+        
+        if isGlass then
+            border.BrickColor = BrickColor.new("Institutional white")
+            border.Material = Enum.Material.Glass
+            border.Transparency = 0.7
+            -- IMPORTANTE: Hacer que el cristal no bloquee los raycast ni los clics
+            border.CanCollide = true     -- Aún colisiona con el orbe
+            border.CanQuery = false      -- No intercepta raycast para clics
+        else
+            border.BrickColor = borderColor
+            border.Material = borderMaterial
+            border.CanCollide = true
+        end
+        
+        border.Anchored = true
+        border.Parent = board
+    end
 
-		border.Parent = board
-	end
-
-	-- Bordes superior e inferior
-	createBorder(Vector3.new(0, height/2 + 1, 0), Vector3.new(width + 8, 2, 2))
-	createBorder(Vector3.new(0, -height/2 - 1, 0), Vector3.new(width + 8, 2, 2))
-
-	-- Bordes laterales
-	createBorder(Vector3.new(width/2 + 3, 0, 0), Vector3.new(2, height + 6, 2))
-	createBorder(Vector3.new(-width/2 - 3, 0, 0), Vector3.new(2, height + 6, 2))
-
-	-- Paredes de cristal para mantener el orbe dentro del área de juego
-	createBorder(Vector3.new(0, 0, 2), Vector3.new(width + 8, height + 6, 0.5), true)  -- Cristal delantero
-	createBorder(Vector3.new(0, 0, -2), Vector3.new(width + 8, height + 6, 0.5), true) -- Cristal trasero
-
-	-- Añadir esquinas decorativas
-	self:createCorners(board, width, height, borderColor, borderMaterial)
-	
-	-- Añadir guías laterales si se desea
-	if Config.BOARD.ADD_SIDE_GUIDES then
-		self:createSideGuides(board, width, height, theme)
-	end
+    -- Bordes superior e inferior
+    createBorder(Vector3.new(0, height/2 + 1, 0), Vector3.new(width + 8, 2, 2))
+    createBorder(Vector3.new(0, -height/2 - 1, 0), Vector3.new(width + 8, 2, 2))
+    -- Bordes laterales más altos
+    createBorder(Vector3.new(width/2 + 3, 0, 0), Vector3.new(borderThickness, borderHeight, 2))
+    createBorder(Vector3.new(-width/2 - 3, 0, 0), Vector3.new(borderThickness, borderHeight, 2))
+    
+    -- Paredes de cristal más grandes
+    createBorder(Vector3.new(0, 0, 2), Vector3.new(width + 12, borderHeight, 0.5), true)  -- Cristal delantero
+    createBorder(Vector3.new(0, 0, -2), Vector3.new(width + 12, borderHeight, 0.5), true) -- Cristal trasero
+    
+    -- Añadir guías adicionales en las esquinas para redirigir las bolas
+    self:createCornerGuides(board, width, height, borderColor, borderMaterial)
+    
+    -- Resto del código...
 end
 
+-- Nueva función para crear guías en las esquinas
+function BorderFactory:createCornerGuides(board, width, height, borderColor, borderMaterial)
+    -- Crear guías en las esquinas superiores para redirigir las bolas
+    local cornerGuidePositions = {
+        {pos = Vector3.new(width/2 - 5, height/2 - 5, 0), rot = 45},  -- Esquina superior derecha
+        {pos = Vector3.new(-width/2 + 5, height/2 - 5, 0), rot = -45} -- Esquina superior izquierda
+    }
+    
+    for _, guide in ipairs(cornerGuidePositions) do
+        local cornerGuide = Instance.new("Part")
+        cornerGuide.Size = Vector3.new(10, 1, 2)
+        cornerGuide.CFrame = CFrame.new(guide.pos) * CFrame.Angles(0, 0, math.rad(guide.rot))
+        cornerGuide.BrickColor = borderColor
+        cornerGuide.Material = borderMaterial
+        cornerGuide.Anchored = true
+        cornerGuide.CanCollide = true
+        
+        -- Propiedades físicas para mejor rebote
+        cornerGuide.CustomPhysicalProperties = PhysicalProperties.new(
+            1,    -- Densidad
+            0.1,  -- Fricción (baja)
+            0.8,  -- Elasticidad (alta)
+            1,    -- Peso
+            0.2   -- Fricción rotacional
+        )
+        
+        cornerGuide.Parent = board
+    end
+end
 -- Crea las esquinas decorativas del tablero
 function BorderFactory:createCorners(board, width, height, borderColor, borderMaterial)
 	local cornerSize = 3

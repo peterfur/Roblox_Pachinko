@@ -166,93 +166,92 @@ end
 
 -- Maneja el lanzamiento de un orbe
 -- Modificación de la función launchOrb en GameplayManager para hacerla más robusta
+function GameplayManager:launchOrb()
+    -- Verificaciones iniciales...
+    
+    -- Seleccionar aleatoriamente uno de los tres tubos de lanzamiento
+    local entryPointIndex = math.random(1, #self.boardManager.entryPoints)
+    local entryPoint = self.boardManager.entryPoints[entryPointIndex]
+    
+    -- Configurar ángulos específicos para cada tubo para asegurar que las bolas caigan dentro del panel
+    local angleRanges = {
+        {min = -45, max = 0},    -- Tubo izquierdo: ángulos hacia la derecha
+        {min = -20, max = 20},   -- Tubo central: ángulos más centrados
+        {min = 0, max = 45}      -- Tubo derecho: ángulos hacia la izquierda
+    }
+    
+    local angleRange = angleRanges[entryPointIndex]
+    local angle = math.rad(math.random(angleRange.min, angleRange.max))
+    
+    -- Siempre apuntar hacia abajo, con componente horizontal variable
+    local direction = Vector3.new(math.sin(angle), -math.cos(angle), 0)
+    
+    print("Lanzando orbe desde tubo " .. entryPointIndex .. " con ángulo " .. math.deg(angle))
+    
+    -- Obtener el orbe actual y posicionarlo en el punto de lanzamiento
+    local orbVisual = self.visualElements.currentOrbVisual
+    orbVisual.Position = entryPoint.Position
+    
+    -- Resto del código de lanzamiento...
+    local currentOrb = self.orbManager:getCurrentOrbInfo()
+    
+    -- Ajustar velocidad de lanzamiento - aumentarla un poco para asegurar que tenga suficiente fuerza
+    local initialVelocity = direction * (Config.PHYSICS.BALL_SPEED * 1.2)
+    
+    -- Reducir el factor aleatorio para más consistencia
+    local randomFactor = 0.02
+    local randomOffset = Vector3.new(
+        (math.random() * 2 - 1) * randomFactor,
+        (math.random() * 2 - 1) * randomFactor,
+        0
+    )
+    
+    initialVelocity = initialVelocity + randomOffset
+    
+    -- Aplicar fuerza al orbe con masa ajustada para mejor comportamiento
+    orbVisual:ApplyImpulse(initialVelocity * orbVisual:GetMass())
+    
+    -- Añadir un pequeño torque (giro) para comportamiento más realista
+    orbVisual:ApplyAngularImpulse(Vector3.new(math.random(-5, 5), math.random(-5, 5), math.random(-5, 5)))
 
-function GameplayManager:launchOrb(direction)
-	-- Verificar si estamos en la fase correcta y si hay un orbe visual
-	if self.gameState.currentPhase ~= "PLAYER_TURN" then
-		print("No se puede lanzar el orbe: No es el turno del jugador (fase actual: " .. self.gameState.currentPhase .. ")")
-		return false
-	end
-	
-	if not self.visualElements.currentOrbVisual then
-		print("No se puede lanzar el orbe: No hay un orbe visual disponible")
-		
-		-- Intentar recuperar si hay un nuevo orbe disponible
-		if #self.orbManager.orbPoolForBattle > 0 then
-			print("Intentando seleccionar nuevo orbe...")
-			self.phaseManager:startPlayerTurn()
-		else
-			print("No hay más orbes disponibles")
-		end
-		
-		return false
-	end
+    -- Disparar eventos
+    for _, callback in ipairs(self.events.onOrbLaunched) do
+        callback(currentOrb, direction)
+    end
 
-	print("Lanzando orbe en dirección:", direction)
+    -- Configurar detección de colisiones a través del gestor de combate
+    self.combatManager:setupOrbCollisions(orbVisual, currentOrb)
 
-	-- Obtener el orbe actual
-	local currentOrb = self.orbManager:getCurrentOrbInfo()
-	local orbVisual = self.visualElements.currentOrbVisual
+    -- Limpiar referencia (ahora se controlará por física)
+    self.visualElements.currentOrbVisual = nil
 
-	-- Aplicar impulso inicial
-	local normalizedDir = direction.Unit
-	local initialVelocity = normalizedDir * Config.PHYSICS.BALL_SPEED
+    -- Actualizar UI
+    self.uiManager:updateUI()
 
-	-- Añadir un pequeño componente aleatorio para más variedad
-	local randomFactor = 0.05 -- Factor aleatorio pequeño
-	local randomOffset = Vector3.new(
-		(math.random() * 2 - 1) * randomFactor,
-		(math.random() * 2 - 1) * randomFactor,
-		0
-	)
-	
-	initialVelocity = initialVelocity + randomOffset
+    -- Añadir efecto visual de lanzamiento
+    local launchEffect = Instance.new("Part")
+    launchEffect.Shape = Enum.PartType.Ball
+    launchEffect.Size = Vector3.new(1, 1, 1)
+    launchEffect.Position = orbVisual.Position
+    launchEffect.Anchored = true
+    launchEffect.CanCollide = false
+    launchEffect.Transparency = 0.5
+    launchEffect.Material = Enum.Material.Neon
+    launchEffect.Color = orbVisual.Color
+    launchEffect.Parent = workspace
+    
+    -- Animar el efecto de lanzamiento
+    spawn(function()
+        for i = 1, 10 do
+            launchEffect.Size = Vector3.new(1 + i*0.3, 1 + i*0.3, 1 + i*0.3)
+            launchEffect.Transparency = 0.5 + (i * 0.05)
+            wait(0.03)
+        end
+        launchEffect:Destroy()
+    end)
 
-	-- Aplicar fuerza al orbe
-	orbVisual:ApplyImpulse(initialVelocity * orbVisual:GetMass())
-	
-	-- Añadir un pequeño torque (giro) para comportamiento más realista
-	orbVisual:ApplyAngularImpulse(Vector3.new(math.random(-5, 5), math.random(-5, 5), math.random(-5, 5)))
-
-	-- Disparar eventos
-	for _, callback in ipairs(self.events.onOrbLaunched) do
-		callback(currentOrb, direction)
-	end
-
-	-- Configurar detección de colisiones a través del gestor de combate
-	self.combatManager:setupOrbCollisions(orbVisual, currentOrb)
-
-	-- Limpiar referencia (ahora se controlará por física)
-	self.visualElements.currentOrbVisual = nil
-
-	-- Actualizar UI
-	self.uiManager:updateUI()
-
-	-- Añadir efecto visual de lanzamiento
-	local launchEffect = Instance.new("Part")
-	launchEffect.Shape = Enum.PartType.Ball
-	launchEffect.Size = Vector3.new(1, 1, 1)
-	launchEffect.Position = orbVisual.Position
-	launchEffect.Anchored = true
-	launchEffect.CanCollide = false
-	launchEffect.Transparency = 0.5
-	launchEffect.Material = Enum.Material.Neon
-	launchEffect.Color = orbVisual.Color
-	launchEffect.Parent = workspace
-	
-	-- Animar el efecto de lanzamiento
-	spawn(function()
-		for i = 1, 10 do
-			launchEffect.Size = Vector3.new(1 + i*0.3, 1 + i*0.3, 1 + i*0.3)
-			launchEffect.Transparency = 0.5 + (i * 0.05)
-			wait(0.03)
-		end
-		launchEffect:Destroy()
-	end)
-
-	return true
+    return true
 end
-
 -- Registra un callback para un evento
 function GameplayManager:registerEvent(eventName, callback)
 	if self.events[eventName] then

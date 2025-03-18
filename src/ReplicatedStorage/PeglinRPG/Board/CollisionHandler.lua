@@ -245,16 +245,20 @@ function CollisionHandler:checkSpeedLaneCollision(orbPart, contactPoint)
 		{self.boardManager.currentBoard}
 	)
 	
-	for _, part in ipairs(speedLanes) do
-		if part:GetAttribute("IsSpeedLane") then
-			-- Aplicar impulso en la dirección del carril
-			local direction = part:GetAttribute("Direction")
-			if direction then
-				local directionVector = Vector3.new(direction.X, direction.Y, direction.Z)
-				local speedBoost = part:GetAttribute("SpeedBoost") or Config.BOARD_ELEMENTS.SPEED_LANES.SPEED_BOOST
-				
-				-- Aplicar impulso
-				orbPart.Velocity = directionVector * speedBoost * orbPart.Velocity.Magnitude
+    for _, part in ipairs(speedLanes) do
+        if part:GetAttribute("IsSpeedLane") then
+            -- Aplicar impulso en la dirección del carril
+            local dirX = part:GetAttribute("DirectionX")
+            local dirY = part:GetAttribute("DirectionY")
+            local dirZ = part:GetAttribute("DirectionZ")
+            
+            if dirX and dirY then
+                local directionVector = Vector3.new(dirX, dirY, dirZ or 0)
+                local speedBoost = part:GetAttribute("SpeedBoost") or 1.5
+                
+                -- Aplicar impulso
+                orbPart.Velocity = directionVector * speedBoost * orbPart.Velocity.Magnitude
+                
 				
 				-- Efecto visual
 				spawn(function()
@@ -283,15 +287,18 @@ function CollisionHandler:checkPortalCollision(orbPart, contactPoint)
 		{self.boardManager.currentBoard}
 	)
 	
-	for _, part in ipairs(portals) do
-		if part:GetAttribute("IsPortal") and part:GetAttribute("PortalType") == "Entry" then
-			-- Obtener posición de salida
-			local exitPos = part:GetAttribute("ExitPosition")
-			if exitPos then
-				-- Teletransportar el orbe
-				local currentVelocity = orbPart.Velocity
-				
-				orbPart.Position = Vector3.new(exitPos.X, exitPos.Y, exitPos.Z)
+    for _, part in ipairs(portals) do
+        if part:GetAttribute("IsPortal") and part:GetAttribute("PortalType") == "Entry" then
+            -- Obtener posición de salida desde los atributos individuales
+            local exitX = part:GetAttribute("ExitPositionX")
+            local exitY = part:GetAttribute("ExitPositionY")
+            local exitZ = part:GetAttribute("ExitPositionZ")
+            
+            if exitX and exitY then
+                -- Teletransportar el orbe
+                local currentVelocity = orbPart.Velocity
+                
+                orbPart.Position = Vector3.new(exitX, exitY, exitZ or 0)
 				
 				-- Mantener la velocidad (posiblemente girada)
 				orbPart.Velocity = currentVelocity * 0.9  -- Ligera pérdida de velocidad

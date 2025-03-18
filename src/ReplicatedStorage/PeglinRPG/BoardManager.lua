@@ -25,6 +25,7 @@ function BoardManager.new()
 	self.criticalPegCount = 0
 	self.activeBoard = nil
 	self.pegs = {}
+	self.entryPoints = {} -- Para almacenar múltiples puntos de entrada
 
 	-- Inicializar submódulos
 	self.pegFactory = PegFactory.new(self)
@@ -46,13 +47,18 @@ function BoardManager:generateBoard(width, height, pegCount, options)
 
 	-- Opciones por defecto
 	options = options or {}
-	local theme = options.theme or "FOREST"
+	local theme = options.theme or "FOREST" -- Asegurar que siempre haya un tema
 	local pegColors = options.pegColors or {
 		BrickColor.new("Bright blue"),
 		BrickColor.new("Cyan"),
 		BrickColor.new("Royal blue")
 	}
 	local backgroundColor = options.backgroundColor or Color3.fromRGB(30, 30, 50)
+
+	-- Imprimir información de depuración
+	print("BoardManager: Generando tablero...")
+	print("Dimensiones:", width, height)
+	print("Tema:", theme)
 
 	-- Crear contenedor para el tablero
 	local board = Instance.new("Folder")
@@ -78,15 +84,18 @@ function BoardManager:generateBoard(width, height, pegCount, options)
 
 	-- Generar clavijas usando PegFactory
 	self.pegFactory:generatePegs(board, width, height, pegCount, pegColors, theme)
-    
-    -- Añadir obstáculos especiales usando ObstacleManager
-    self.obstacleManager:addSpecialObstacles(board, width, height, theme)
+	
+	-- Añadir obstáculos especiales usando ObstacleManager
+	-- Envolvemos en pcall para evitar que los errores interrumpan la generación
+	pcall(function()
+		self.obstacleManager:addSpecialObstacles(board, width, height, theme)
+	end)
 
 	-- Añadir decoraciones temáticas usando ThemeDecorator
 	self.themeDecorator:addThemeDecorations(board, theme, width, height)
 
-	-- Crear punto de entrada usando EntryPointFactory
-	self.entryPointFactory:createEntryPoint(Vector3.new(0, height/2 - 4, 0), board, theme)
+	-- Crear puntos de entrada usando EntryPointFactory (actualizado para múltiples puntos)
+	self.entryPoints = self.entryPointFactory:createEntryPoints(board, width, height, theme)
 
 	-- Posicionar el tablero en el mundo
 	board.Parent = workspace

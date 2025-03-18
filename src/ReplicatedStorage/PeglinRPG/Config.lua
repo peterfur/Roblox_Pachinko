@@ -207,4 +207,38 @@ Config.PEG_TYPES = {
         MAX_HITS = 1
     }
 }
+-- Configuración de elementos del tablero
+Config.BOARD_ELEMENTS = {
+    BUMPERS = {
+        MIN_COUNT = 3,
+        MAX_COUNT = 6,
+        SIZE = 3,
+        BOUNCE_FORCE = 1.5
+    },
+    INTERNAL_WALLS = {
+        MIN_COUNT = 1,
+        MAX_COUNT = 3,
+        MIN_LENGTH = 10,
+        MAX_LENGTH = 20
+    },
+    MULTIPLIER_ZONES = {
+        MIN_COUNT = 1,
+        MAX_COUNT = 3,
+        SIZE = 8,
+        MIN_MULTIPLIER = 2,
+        MAX_MULTIPLIER = 4
+    },
+    SPEED_LANES = {
+        MIN_COUNT = 1,
+        MAX_COUNT = 3,
+        SEGMENT_COUNT = 6,
+        SPEED_BOOST = 1.5
+    },
+    TELEPORT_PORTALS = {
+        MIN_PAIRS = 0,
+        MAX_PAIRS = 2,
+        SIZE = 4
+    }
+}
+
 return Config
