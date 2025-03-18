@@ -1,454 +1,238 @@
-# PeglinRPG
+# PeglinRPG - Documentación de Refactorización
 
-Una adaptación para Roblox del popular juego roguelike de pachinko "Peglin". Este juego combina la satisfactoria mecánica del pachinko con elementos RPG, donde los jugadores lanzan orbes a un tablero lleno de clavijas para dañar a los enemigos y avanzar a través de diversos encuentros.
+## Introducción
 
-## Tabla de Contenidos
+Este documento describe la refactorización completa de la arquitectura de PeglinRPG, siguiendo el plan establecido en el archivo README original. El objetivo principal ha sido transformar la estructura basada en "Manager" a una arquitectura orientada a servicios con mejor mantenibilidad, escalabilidad y separación de responsabilidades.
 
-1. [Arquitectura del Sistema](#arquitectura-del-sistema)
-2. [Módulos Principales](#módulos-principales)
-3. [Sistema de Tablero](#sistema-de-tablero)
-4. [Flujo de Juego](#flujo-de-juego)
-5. [Configuración](#configuración)
-6. [Estructura del Proyecto](#estructura-del-proyecto)
-7. [Problemas Conocidos y Soluciones](#problemas-conocidos-y-soluciones)
-8. [Plan de Refactorización](#plan-de-refactorización)
-9. [Mejoras Futuras](#mejoras-futuras)
+## Cambios Principales
 
-## Arquitectura del Sistema
+La refactorización se ha centrado en los siguientes aspectos:
 
-PeglinRPG sigue una arquitectura modular donde las funcionalidades están separadas en módulos específicos con responsabilidades claras. Los componentes principales son:
+1. **Arquitectura por Servicios**: Reemplazo de los gestores monolíticos por servicios especializados.
+2. **Inyección de Dependencias**: Implementación de un ServiceLocator para gestionar dependencias.
+3. **Sistema de Eventos Centralizado**: Implementación de un EventBus para comunicación desacoplada.
+4. **Manejo de Estado Centralizado**: Implementación de un Store inspirado en Flux/Redux.
+5. **Interfaces de Servicios**: Definición de ciclos de vida estándar para todos los servicios.
 
-- **GameplayManager**: Coordinador central para el flujo general del juego
-- **BoardManager**: Gestiona el tablero de pachinko y sus elementos
-- **PlayerManager**: Maneja los datos del jugador, inventario y progresión
-- **EnemyManager**: Controla el comportamiento de los enemigos y mecánicas de combate
-- **OrbManager**: Gestiona los diferentes tipos de orbes y sus efectos
-- **UIManager**: Maneja todos los elementos de la interfaz de usuario
-
-## Módulos Principales
-
-### GameplayManager
-
-El coordinador central que conecta todos los demás gestores. Controla:
-- Fases del juego (turno del jugador, turno del enemigo, etc.)
-- Flujo de combate
-- Manejo de eventos
-- Transiciones de escena
-
-```lua
--- Ejemplo de inicio de un nuevo juego
-local gameManager = GameplayManager.new()
-gameManager:startNewGame()
-```
-
-### PlayerManager
-
-Gestiona todos los datos relacionados con el jugador incluyendo:
-- Salud y estadísticas
-- Inventario (orbes, reliquias)
-- Seguimiento de progresión
-- Experiencia y nivelación
-
-```lua
--- Ejemplo de añadir un orbe al inventario del jugador
-playerManager:addOrb("FIRE")
-```
-
-### EnemyManager
-
-Controla los enemigos en combate:
-- Estadísticas y comportamiento del enemigo
-- Patrones de ataque
-- Efectos de estado
-- Representación visual
-
-```lua
--- Ejemplo de crear un enemigo
-local enemyManager = EnemyManager.new("GOBLIN", false)
-```
-
-### OrbManager
-
-Maneja los orbes que los jugadores lanzan:
-- Tipos y propiedades de los orbes
-- Selección y agrupación de orbes
-- Física y efectos de los orbes
-
-```lua
--- Ejemplo de crear un orbe visual
-local orbVisual = orbManager:createOrbVisual(orbData, position)
-```
-
-## Sistema de Tablero
-
-El sistema de tablero ha sido modularizado para una mejor mantenibilidad. Consiste en:
-
-### BoardManager
-
-El coordinador principal que utiliza factorías y manejadores especializados:
-
-```lua
--- Ejemplo de generación de un tablero
-boardManager:generateBoard(width, height, pegCount, options)
-```
-
-### Módulos del Tablero
-
-Ubicados en `ReplicatedStorage/PeglinRPG/Board/`:
-
-- **PegFactory**: Crea y gestiona clavijas (estándar, esférica, crítica)
-- **BorderFactory**: Construye bordes y paneles de vidrio
-- **ObstacleManager**: Maneja obstáculos especiales (bumpers, paredes, zonas)
-- **ThemeDecorator**: Añade decoraciones específicas del tema
-- **EntryPointFactory**: Crea el punto de lanzamiento del orbe
-- **CollisionHandler**: Procesa colisiones y eventos físicos
-
-## Flujo de Juego
-
-1. **Inicialización del Juego**:
-   - Se cargan o crean los datos del jugador
-   - Se configura la UI
-   - Se prepara el primer encuentro
-
-2. **Configuración del Encuentro**:
-   - Se genera el enemigo
-   - Se crea el tablero con el tema apropiado
-   - Se inicializa el pool de orbes
-
-3. **Turno del Jugador**:
-   - El jugador selecciona la dirección para lanzar el orbe
-   - El orbe rebota en el tablero
-   - El daño se calcula basado en las clavijas golpeadas
-   - Si se usan todos los orbes, el turno termina
-
-4. **Turno del Enemigo**:
-   - El enemigo selecciona un ataque
-   - Se reproduce la animación del ataque
-   - Se aplica el daño al jugador
-   - El turno vuelve al jugador
-
-5. **Victoria/Derrota**:
-   - Si el enemigo es derrotado, se entregan recompensas
-   - Si el jugador es derrotado, aparece la pantalla de fin de juego
-   - Después de la victoria, se avanza al siguiente encuentro
-
-## Configuración
-
-Los parámetros del juego están centralizados en `Config.lua`:
-
-### Secciones Principales de Configuración
-
-- `Config.GAME`: Configuraciones básicas del juego
-- `Config.PHYSICS`: Parámetros físicos para los orbes
-- `Config.BOARD`: Dimensiones y propiedades del tablero
-- `Config.COMBAT`: Mecánicas de combate
-- `Config.ORBS`: Tipos de orbes y sus propiedades
-- `Config.ENEMIES`: Definiciones de enemigos
-- `Config.RELICS`: Propiedades de los objetos reliquia
-- `Config.LEVELS`: Temas y propiedades de los niveles
-- `Config.BOARD_ELEMENTS`: Configuraciones de obstáculos especiales
-- `Config.PEG_TYPES`: Diferentes configuraciones de clavijas
-- `Config.EFFECTS`: Parámetros de efectos visuales
-
-Ejemplo:
-```lua
--- Cambiar el tamaño del tablero
-Config.BOARD = {
-    WIDTH = 60,
-    HEIGHT = 70,
-    DEFAULT_PEG_COUNT = 120,
-    MIN_PEG_DISTANCE = 3.2,
-}
-```
-
-## Estructura del Proyecto
-
-El proyecto sigue una estructura modular con clara separación de responsabilidades. Aquí está la estructura completa de archivos:
+## Nueva Estructura de Archivos
 
 ```
 src/
 ├── ReplicatedStorage/
 │   ├── PeglinRPG/
-│   │   ├── Board/
-│   │   │   ├── BorderFactory.lua        # Crea bordes y paneles de vidrio
-│   │   │   ├── CollisionHandler.lua     # Maneja eventos de colisión
-│   │   │   ├── EntryPointFactory.lua    # Crea puntos de lanzamiento de orbes
-│   │   │   ├── ObstacleManager.lua      # Gestiona obstáculos especiales
-│   │   │   ├── PegFactory.lua           # Crea y gestiona clavijas
-│   │   │   └── ThemeDecorator.lua       # Añade decoraciones específicas del tema
-│   │   │
-│   │   ├── Gameplay/
-│   │   │   ├── CombatManager.lua        # Gestiona mecánicas de combate
-│   │   │   ├── EffectsManager.lua       # Controla efectos visuales
-│   │   │   ├── PhaseManager.lua         # Maneja fases del juego
-│   │   │   ├── RewardManager.lua        # Distribuye recompensas
-│   │   │   ├── UIManager.lua            # Controla la interfaz de usuario
-│   │   │   └── init.meta.json           # Metadatos del módulo
-│   │   │
-│   │   ├── BoardManager.lua             # Coordina la creación del tablero
+│   │   ├── Services/                    # Nueva carpeta para servicios
+│   │   │   ├── ServiceLocator.lua       # Sistema de inyección de dependencias
+│   │   │   ├── EventBus.lua             # Sistema de eventos centralizado
+│   │   │   ├── Store.lua                # Sistema de manejo de estado
+│   │   │   ├── ServiceInterface.lua     # Interfaz base para servicios
+│   │   │   ├── BoardService/            # Servicios especializados
+│   │   │   ├── CombatService/
+│   │   │   ├── PlayerService/
+│   │   │   ├── EnemyService/
+│   │   │   ├── PhysicsService/
+│   │   │   ├── VisualService/
+│   │   │   ├── UIService/
+│   │   │   ├── EffectsService.lua
+│   │   │   ├── GameplayService.lua
+│   │   │   └── ...
+│   │   ├── Board/                       # Módulos específicos del tablero
+│   │   │   ├── BorderFactory.lua        
+│   │   │   ├── CollisionHandler.lua     
+│   │   │   ├── ...
+│   │   ├── ServicesLoader.lua           # Cargador de servicios centralizado
 │   │   ├── Config.lua                   # Configuración central
-│   │   ├── EnemyManager.lua             # Gestiona enemigos
-│   │   ├── GameplayManager.lua          # Coordinador principal del juego
-│   │   ├── OrbManager.lua               # Gestiona creación y comportamiento de orbes
-│   │   ├── PeglinLauncher.lua           # Punto de entrada del juego
-│   │   ├── PeglinRPG_Initializer.lua    # Inicializa la estructura del juego
-│   │   ├── PlayerManager.lua            # Gestiona datos del jugador
-│   │   └── init.meta.json               # Metadatos del módulo
-│   │
-│   └── Shared/
-│       ├── Hello.lua                    # Módulo compartido de ejemplo
-│       └── init.meta.json               # Metadatos del módulo
-│
-├── ServerScriptService/
-│   └── PeglinLauncher.server.lua        # Punto de entrada del servidor
-│
-└── StarterPlayer/
-    └── StarterPlayerScripts/
-        └── PeglinClient.client.lua      # Controlador del cliente
+│   │   └── PeglinRPG_Initializer.lua    # Punto de entrada refactorizado
 ```
 
-## Problemas Conocidos y Soluciones
+## Componentes Principales
 
-### Problemas físicos y de comportamiento:
+### ServiceLocator
 
-1. **Orbes que se atascan en obstáculos**
-   - *Solución implementada*: Sistema de detección y liberación automática en `CollisionHandler.lua`
-   - *Propiedades físicas mejoradas* en `OrbManager.lua` y `Config.lua`
+El ServiceLocator es el sistema central de inyección de dependencias que permite:
 
-2. **Orbes que se salen del tablero**
-   - *Solución implementada*: Bordes y contenedores mejorados en `BorderFactory.lua`
-   - *Sistema anti-fuga* con límites externos invisibles
-
-3. **Lanzamientos sin daño**
-   - *Solución implementada*: Sistema de daño mínimo garantizado en `CombatManager.lua`
-   - Asegura que cada lanzamiento cause algún daño, incluso si no golpea ninguna clavija
-
-4. **Problemas de carga de módulos**
-   - *Solución implementada*: Manejo mejorado de errores y verificaciones de nil en `GameplayManager.lua`
-   - Sistema de recuperación para componentes faltantes o corruptos
-
-## Plan de Refactorización
-
-Para mejorar la modularidad y el mantenimiento del código, se propone el siguiente plan de refactorización:
-
-### 1. Implementar Arquitectura por Servicios
-
-Reorganizar el código siguiendo un patrón de Servicios:
+- Registrar servicios con nombres únicos
+- Obtener servicios cuando sean necesarios
+- Inicializar todos los servicios de forma centralizada
+- Limpiar recursos cuando sea necesario
 
 ```lua
--- Estructura de servicios propuesta
-src/
-├── ReplicatedStorage/
-│   ├── PeglinRPG/
-│   │   ├── Services/               # Nuevo nivel de organización
-│   │   │   ├── BoardService/       # Todo lo relacionado con el tablero
-│   │   │   ├── CombatService/      # Servicios de combate 
-│   │   │   ├── PlayerService/      # Gestión del jugador
-│   │   │   ├── EnemyService/       # Gestión de enemigos
-│   │   │   ├── PhysicsService/     # Simulación física independiente
-│   │   │   ├── VisualService/      # Efectos visuales y feedback
-│   │   │   └── UIService/          # Interfaces de usuario
-```
-
-### 2. Implementar Inyección de Dependencias
-
-Crear un sistema de inyección de dependencias:
-
-```lua
--- Ejemplo de cómo funciona el sistema de inyección de dependencias
-local ServiceLocator = {}
-local services = {}
-
-function ServiceLocator:RegisterService(serviceName, serviceInstance)
-    services[serviceName] = serviceInstance
-end
-
-function ServiceLocator:GetService(serviceName)
-    return services[serviceName]
-end
-
--- Uso:
+-- Ejemplo de uso del ServiceLocator
 local boardService = ServiceLocator:GetService("BoardService")
+local enemyService = ServiceLocator:GetService("EnemyService")
 ```
 
-### 3. Mejorar el Sistema de Eventos
+### EventBus
 
-Implementar un bus de eventos centralizado:
+El EventBus facilita la comunicación entre servicios, permitiendo que componentes independientes se comuniquen sin acoplamiento directo:
+
+- Publicar eventos con cualquier número de parámetros
+- Suscribirse a eventos específicos
+- Cancelar suscripciones cuando no sean necesarias
+- Gestionar errores en los suscriptores sin afectar al resto del sistema
 
 ```lua
--- Sistema de eventos mejorado
-local EventBus = {}
-local subscribers = {}
+-- Ejemplo de publicación de eventos
+EventBus:Publish("OrbLaunched", orbVisual, orbData)
 
-function EventBus:Subscribe(eventName, callback)
-    if not subscribers[eventName] then
-        subscribers[eventName] = {}
-    end
-    table.insert(subscribers[eventName], callback)
-    
-    -- Devolver una función para cancelar la suscripción
-    return function() 
-        self:Unsubscribe(eventName, callback) 
-    end
-end
-
-function EventBus:Publish(eventName, ...)
-    local eventSubscribers = subscribers[eventName]
-    if eventSubscribers then
-        for _, callback in ipairs(eventSubscribers) do
-            callback(...)
-        end
-    end
-end
-
-function EventBus:Unsubscribe(eventName, callback)
-    local eventSubscribers = subscribers[eventName]
-    if eventSubscribers then
-        for i, subscribedCallback in ipairs(eventSubscribers) do
-            if subscribedCallback == callback then
-                table.remove(eventSubscribers, i)
-                break
-            end
-        end
-    end
-end
+-- Ejemplo de suscripción a eventos
+local unsubscribe = EventBus:Subscribe("OrbLaunched", function(orbVisual, orbData)
+    -- Código para manejar el evento
+end)
 ```
 
-### 4. Mejorar el Manejo de Estado
+### Store
 
-Implementar un patrón similar a Flux/Redux para la gestión de estado:
+El Store proporciona un manejo de estado centralizado inspirado en Flux/Redux:
 
-```lua
--- Sistema de estado centralizado
-local Store = {}
-Store.__index = Store
-
-function Store.new(initialState, reducer)
-    local self = setmetatable({}, Store)
-    self.state = initialState or {}
-    self.reducer = reducer
-    self.listeners = {}
-    return self
-end
-
-function Store:GetState()
-    return self.state
-end
-
-function Store:Dispatch(action)
-    self.state = self.reducer(self.state, action)
-    self:NotifyListeners()
-end
-
-function Store:Subscribe(listener)
-    table.insert(self.listeners, listener)
-    
-    -- Devolver una función para cancelar la suscripción
-    return function()
-        for i, l in ipairs(self.listeners) do
-            if l == listener then
-                table.remove(self.listeners, i)
-                break
-            end
-        end
-    end
-end
-
-function Store:NotifyListeners()
-    for _, listener in ipairs(self.listeners) do
-        listener(self.state)
-    end
-end
-```
-
-### 5. Implementar Testing Automático
-
-Crear una estructura de pruebas unitarias:
+- Almacena el estado de la aplicación en una única fuente de verdad
+- Modifica el estado a través de acciones y reducers
+- Notifica a los suscriptores cuando el estado cambia
+- Permite crear selectores para acceder a partes específicas del estado
 
 ```lua
--- Framework de testing simple
-local TestRunner = {}
-
-function TestRunner:RunTests(tests)
-    local passCount, failCount = 0, 0
-    
-    for testName, testFunc in pairs(tests) do
-        local success, errorMsg = pcall(testFunc)
-        
-        if success then
-            print("✓ " .. testName)
-            passCount = passCount + 1
-        else
-            print("✗ " .. testName .. ": " .. errorMsg)
-            failCount = failCount + 1
-        end
+-- Ejemplo de creación de un Store
+local gameStore = Store.new(initialState, function(state, action)
+    if action.type == "CHANGE_PHASE" then
+        return {
+            ...state,
+            currentPhase = action.payload
+        }
     end
-    
-    print("Resultados: " .. passCount .. " pasados, " .. failCount .. " fallados")
-end
+    return state
+end)
 
--- Ejemplo de uso:
-TestRunner:RunTests({
-    ["La salud del jugador debe inicializarse correctamente"] = function()
-        local playerManager = PlayerManager.new()
-        assert(playerManager.stats.health == Config.COMBAT.PLAYER_STARTING_HEALTH, 
-               "La salud inicial no coincide con la configuración")
-    end
+-- Ejemplo de dispatch de una acción
+gameStore:Dispatch({
+    type = "CHANGE_PHASE",
+    payload = "PLAYER_TURN"
 })
 ```
 
-### 6. Implementar Ciclo de Vida de los Módulos
+### ServiceInterface
 
-Establecer métodos de ciclo de vida estándar para todos los módulos:
+El ServiceInterface define un ciclo de vida estándar para todos los servicios:
+
+- `Initialize()`: Configuración inicial del servicio
+- `Start()`: Activación del servicio
+- `Update(deltaTime)`: Actualización por frame (si es necesario)
+- `Stop()`: Detención del servicio
+- `Cleanup()`: Limpieza de recursos
 
 ```lua
--- Interface de ciclo de vida para los módulos
-local ModuleInterface = {}
-ModuleInterface.__index = ModuleInterface
+-- Ejemplo de creación de un servicio personalizado
+local MyService = ServiceInterface:Extend("MyService")
 
-function ModuleInterface.new()
-    local self = setmetatable({}, ModuleInterface)
+function MyService.new(serviceLocator, eventBus)
+    local self = setmetatable({}, MyService)
+    self.serviceLocator = serviceLocator
+    self.eventBus = eventBus
     return self
 end
 
-function ModuleInterface:Initialize()
-    -- Configuración inicial
-end
-
-function ModuleInterface:Start()
-    -- Comenzar funcionalidad
-end
-
-function ModuleInterface:Update(deltaTime)
-    -- Actualización por frame
-end
-
-function ModuleInterface:Cleanup()
-    -- Limpieza de recursos
+function MyService:Initialize()
+    ServiceInterface.Initialize(self) -- Llamar al método de la clase base
+    -- Código de inicialización personalizado
 end
 ```
 
-## Mejoras Futuras
+## Servicios Principales
 
-- **Nuevos Tipos de Orbes**: Añadir más orbes especializados con efectos únicos
-- **Enemigos Adicionales**: Expandir el roster de enemigos con nuevos patrones de ataque
-- **Elementos del Tablero**: Más obstáculos interactivos como clavijas móviles y teletransportadores
-- **Generación Procedural de Niveles**: Diseños dinámicos de tablero basados en la dificultad
-- **Sistema de Logros**: Metas y recompensas dentro del juego
-- **Soporte para Dispositivos Móviles**: Optimización de controles táctiles
-- **Modo Multijugador**: Opciones de juego PvP o cooperativo
-- **Sistema de Guardado de Progreso**: Persistencia de datos del jugador
+### BoardService
 
----
+Gestiona el tablero de juego, reemplazando al antiguo BoardManager:
 
-## Próximos Pasos para la Refactorización
+- Genera y limpia el tablero
+- Coordina los diferentes componentes del tablero
+- Gestiona las clavijas y los puntos de entrada
+- Maneja las colisiones y eventos físicos
 
-1. Comenzar con la creación del sistema de Servicios y ServiceLocator
-2. Migrar BoardManager a BoardService manteniendo compatibilidad con versiones anteriores
-3. Implementar EventBus para desacoplar las comunicaciones entre servicios
-4. Migrar GameplayManager para usar el nuevo sistema de servicios
-5. Implementar tests unitarios comenzando por los módulos más críticos
-6. Migrar progresivamente los restantes gestores al nuevo sistema de servicios
-7. Documentar los nuevos patrones y estructuras de código
+### OrbService
 
-Creado por el equipo de desarrollo de PeglinRPG. Última actualización: Marzo 2025.
+Gestiona los orbes del juego, reemplazando al antiguo OrbManager:
+
+- Crea instancias de orbes según su tipo
+- Genera representaciones visuales de los orbes
+- Procesa golpes contra clavijas
+- Aplica efectos especiales según el tipo de orbe
+
+### CombatService
+
+Gestiona el sistema de combate, reemplazando al antiguo CombatManager:
+
+- Configura la detección de colisiones para orbes
+- Monitorea el estado de los orbes (si caen o se detienen)
+- Aplica daño a los enemigos
+- Maneja la victoria en combate
+
+### GameplayService
+
+Coordina el flujo general del juego, reemplazando al antiguo GameplayManager:
+
+- Inicia nuevos juegos
+- Configura encuentros
+- Cambia las fases del juego
+- Maneja eventos de victoria o derrota
+
+### EffectsService
+
+Gestiona los efectos visuales y sonoros:
+
+- Muestra números de daño flotantes
+- Crea efectos visuales según el tipo de orbe
+- Muestra efectos de resurrección y victoria
+- Mejora el feedback visual para el jugador
+
+## ServicesLoader
+
+El ServicesLoader actúa como punto de entrada para inicializar todo el sistema:
+
+- Carga todos los servicios disponibles
+- Inicializa los servicios en el orden correcto
+- Inicia el juego a través del GameplayService
+- Proporciona métodos para limpiar recursos cuando sea necesario
+
+## Comparación con la Arquitectura Original
+
+### Antes:
+
+- Managers acoplados entre sí con referencias directas
+- Comunicación a través de llamadas directas entre componentes
+- Estado distribuido en múltiples managers
+- Ciclo de vida inconsistente entre componentes
+- Difícil de probar y modificar partes individuales
+
+### Después:
+
+- Servicios desacoplados que se comunican a través del EventBus
+- Dependencias explícitas a través del ServiceLocator
+- Estado centralizado en Stores
+- Ciclo de vida estandarizado para todos los servicios
+- Mayor facilidad para probar y modificar componentes individuales
+
+## Beneficios de la Refactorización
+
+1. **Mayor Modularidad**: Cada servicio tiene una responsabilidad única y bien definida.
+2. **Mejor Testabilidad**: Los servicios pueden probarse de forma aislada con dependencias simuladas.
+3. **Escalabilidad Mejorada**: Es más fácil añadir nuevas funcionalidades sin afectar al código existente.
+4. **Mantenibilidad Superior**: El código es más legible y tiene una estructura más predecible.
+5. **Facilidad para Depurar**: Los problemas se pueden localizar más fácilmente en servicios específicos.
+
+## Integración con el Código Actual
+
+Los servicios refactorizados mantienen compatibilidad con el código actual, permitiendo una migración gradual:
+
+1. Los módulos específicos del tablero (PegFactory, BorderFactory, etc.) siguen funcionando como antes, pero ahora son coordinados por BoardService.
+2. La configuración central sigue residiendo en Config.lua, permitiendo ajustes fáciles.
+3. El flujo de juego sigue el mismo patrón, pero ahora está organizado de forma más modular y mantenible.
+
+## Próximos Pasos
+
+1. **Migración Completa**: Continuar migrando los managers restantes a la arquitectura de servicios.
+2. **Tests Unitarios**: Implementar pruebas unitarias para cada servicio.
+3. **Documentación Detallada**: Ampliar la documentación de la API para cada servicio.
+4. **Optimización de Rendimiento**: Analizar y optimizar el rendimiento con la nueva arquitectura.
+5. **Nuevas Funcionalidades**: Utilizar la nueva arquitectura para implementar las mejoras futuras mencionadas en el README original.
+
+## Conclusión
+
+Esta refactorización transforma PeglinRPG en un sistema más robusto, mantenible y escalable, sentando las bases para futuras mejoras y expansiones del juego. La nueva arquitectura basada en servicios facilita el desarrollo colaborativo y reduce la complejidad del código, permitiendo a los desarrolladores centrarse en crear nuevas funcionalidades en lugar de luchar con el código existente.
