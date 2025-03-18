@@ -13,8 +13,13 @@ function CombatManager.new(gameplayManager)
 	-- Referencia al gestor principal
 	self.gameplayManager = gameplayManager
 
-	-- Almacenar la conexión actual del orbe para poder desconectarla
+	-- ARREGLO: Almacenar la conexión actual del orbe para poder desconectarla
 	self.currentOrbConnection = nil
+    
+    -- ARREGLO: Registro de clavijas golpeadas para asegurar que se registre el daño
+    self.hitPegs = {}
+    self.damageDealt = 0
+    self.minDamagePerLaunch = 10 -- Daño mínimo garantizado por lanzamiento
 
 	return self
 end
@@ -24,6 +29,10 @@ function CombatManager:setupOrbCollisions(orbVisual, orbData)
 	-- Referencias directas para mejor acceso
 	local gm = self.gameplayManager
 	local effectsManager = gm.effectsManager
+
+	-- ARREGLO: Reiniciar el registro de clavijas golpeadas y daño acumulado
+	self.hitPegs = {}
+	self.damageDealt = 0
 
 	-- Conectar evento de colisión
 	local bounceCount = 0
@@ -40,10 +49,53 @@ function CombatManager:setupOrbCollisions(orbVisual, orbData)
 		self.currentOrbConnection = nil
 	end
 
-	-- Conectar evento de colisión
+	-- ARREGLO: Verificar constantemente si el orbe está activo pero no ha golpeado nada
+	spawn(function()
+		local launchTime = tick()
+		local checkInterval = 0.5 -- Verificar cada medio segundo
+		local maxTimeWithoutHit = 3.0 -- Si después de 3 segundos no ha golpeado nada, aplicar daño mínimo
+		
+		while orbVisual and orbVisual.Parent do
+			-- Si ha pasado suficiente tiempo sin golpes y no se ha acumulado daño, aplicar daño mínimo
+			if tick() - launchTime > maxTimeWithoutHit and self.damageDealt == 0 and #self.hitPegs == 0 then
+				print("No se detectaron golpes, aplicando daño mínimo garantizado:", self.minDamagePerLaunch)
+				
+				-- Aplicar daño mínimo garantizado
+				local killed, _ = gm.enemyManager:takeDamage(self.minDamagePerLaunch, "NORMAL")
+				
+				-- Actualizar UI del enemigo
+				gm.enemyManager.updateHealthBar()
+				
+				-- Mostrar mensaje de "¡Golpe automático!" para informar al usuario
+				effectsManager:showDamageNumber(Vector3.new(0, 0, -30), self.minDamagePerLaunch, false, "¡Golpe automático!")
+				
+				-- Verificar si el enemigo murió
+				if killed then
+					self:handleVictory()
+				end
+				
+				-- Marcar que ya aplicamos daño para evitar duplicados
+				self.damageDealt = self.minDamagePerLaunch
+				break
+			end
+			
+			wait(checkInterval)
+		end
+	end)
+
+	-- Conectar evento de colisión principal con mejor manejo
 	self.currentOrbConnection = orbVisual.Touched:Connect(function(hit)
 		-- Verificar si es una clavija
 		if hit:GetAttribute("IsPeg") then
+			-- ARREGLO: Verificar si ya se golpeó esta clavija (evitar conteo doble)
+			local pegId = hit:GetFullName()
+			if self.hitPegs[pegId] then
+				return
+			end
+			
+			-- Registrar esta clavija como golpeada
+			self.hitPegs[pegId] = true
+
 			-- Evitar golpear la misma clavija repetidamente
 			if hit == lastHitPeg then
 				return
@@ -73,6 +125,9 @@ function CombatManager:setupOrbCollisions(orbVisual, orbData)
 			-- Aplicar multiplicador de combo
 			local comboMultiplier = math.min(3, 1 + (comboCount * 0.1))
 			damageAmount = math.floor(damageAmount * comboMultiplier)
+
+			-- ARREGLO: Acumular el daño total realizado
+			self.damageDealt = self.damageDealt + damageAmount
 
 			-- Aplicar daño al enemigo
 			local killed, actualDamage = gm.enemyManager:takeDamage(damageAmount, damageType)
@@ -120,6 +175,22 @@ function CombatManager:setupOrbCollisions(orbVisual, orbData)
 			-- Verificar si cayó fuera del tablero
 			if orbVisual.Position.Y < -50 then
 				print("Orbe cayó fuera del tablero")
+				
+				-- ARREGLO: Si no ha hecho daño, aplicar daño mínimo garantizado
+				if self.damageDealt == 0 then
+					print("No se registró daño, aplicando daño mínimo:", self.minDamagePerLaunch)
+					local killed, _ = gm.enemyManager:takeDamage(self.minDamagePerLaunch, "NORMAL")
+					gm.enemyManager.updateHealthBar()
+					
+					-- Mostrar mensaje de daño automático
+					effectsManager:showDamageNumber(Vector3.new(0, 0, -30), self.minDamagePerLaunch, false, "¡Golpe automático!")
+					
+					if killed then
+						self:handleVictory()
+					end
+				end
+				
+				
 				orbVisual:Destroy()
 				checkConnection:Disconnect()
 
@@ -153,6 +224,24 @@ function CombatManager:setupOrbCollisions(orbVisual, orbData)
 						-- Si se mantiene detenido por suficiente tiempo
 						if stillCounter > 30 then
 							print("Orbe se detuvo")
+							
+							-- ARREGLO: Si no ha hecho daño, aplicar daño mínimo garantizado
+							if self.damageDealt == 0 then
+								print("No se registró daño, aplicando daño mínimo:", self.minDamagePerLaunch)
+								local killed, _ = gm.enemyManager:takeDamage(self.minDamagePerLaunch, "NORMAL")
+								gm.enemyManager.updateHealthBar()
+								
+								-- Mostrar mensaje de daño automático
+								effectsManager:showDamageNumber(Vector3.new(0, 0, -30), self.minDamagePerLaunch, false, "¡Golpe automático!")
+								
+								if killed then
+									self:handleVictory()
+									stillCheckConnection:Disconnect()
+									checkConnection:Disconnect()
+									return
+								end
+							end
+							
 							orbVisual:Destroy()
 							stillCheckConnection:Disconnect()
 							checkConnection:Disconnect()
@@ -182,37 +271,12 @@ end
 
 -- Anima una clavija cuando es golpeada
 function CombatManager:animatePegHit(pegPart, damageType)
-	-- Guardar color y transparencia originales
-	local originalColor = pegPart.Color
-	local originalTransparency = pegPart.Transparency
-
-	-- Efecto de brillo al golpear
-	pegPart.Color = Color3.fromRGB(255, 255, 255)
-
-	-- Restaurar color original
-	spawn(function()
-		wait(0.1)
-		pegPart.Color = originalColor
-
-		-- Incrementar contador de golpes
-		local hitCount = pegPart:GetAttribute("HitCount") or 0
-		hitCount = hitCount + 1
-		pegPart:SetAttribute("HitCount", hitCount)
-
-		-- Si la clavija ha sido golpeada suficientes veces, desaparece
-		if hitCount >= 2 then
-			for i = 1, 10 do
-				pegPart.Transparency = originalTransparency + (i * 0.1)
-				wait(0.03)
-			end
-			pegPart.CanCollide = false
-			pegPart:SetAttribute("IsPeg", false)
-		end
-	end)
+	-- ARREGLO: Esta función está implementada en CollisionHandler.lua
+	-- Aquí solo manejamos los aspectos del daño
+	self.gameplayManager.boardManager:registerPegHit(pegPart)
 end
 
--- Maneja la victoria sobre un enemigo
--- Modificación para mejorar la función handleVictory
+-- Maneja la victoria sobre un enemigo con mejor feedback
 function CombatManager:handleVictory()
 	print("¡Victoria sobre el enemigo!")
 
@@ -220,24 +284,32 @@ function CombatManager:handleVictory()
 	local gm = self.gameplayManager
 	gm.gameState.battleResult = "WIN"
 
+	-- ARREGLO: Mensaje de victoria más visual y satisfactorio
 	-- Mostrar mensaje de victoria
 	local victoryMessage = Instance.new("BillboardGui")
-	victoryMessage.Size = UDim2.new(0, 400, 0, 100)
+	victoryMessage.Size = UDim2.new(0, 500, 0, 120)
 	victoryMessage.StudsOffset = Vector3.new(0, 0, 0)
 	victoryMessage.Adornee = workspace.Terrain
 	victoryMessage.AlwaysOnTop = true
 
 	local textLabel = Instance.new("TextLabel")
 	textLabel.Size = UDim2.new(1, 0, 1, 0)
-	textLabel.BackgroundTransparency = 0.5
-	textLabel.BackgroundColor3 = Color3.fromRGB(0, 50, 0)
-	textLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+	textLabel.BackgroundTransparency = 0.3
+	textLabel.BackgroundColor3 = Color3.fromRGB(0, 80, 0)
+	textLabel.TextColor3 = Color3.fromRGB(120, 255, 120)
 	textLabel.Font = Enum.Font.SourceSansBold
-	textLabel.TextSize = 36
+	textLabel.TextSize = 48
 	textLabel.Text = "¡VICTORIA!"
 	textLabel.Parent = victoryMessage
 
 	victoryMessage.Parent = workspace
+
+	-- Reproducir sonido de victoria
+	local victorySound = Instance.new("Sound")
+	victorySound.SoundId = "rbxassetid://9120903079" -- Sonido de victoria
+	victorySound.Volume = 0.8
+	victorySound.Parent = workspace
+	victorySound:Play()
 
 	-- Animar mensaje
 	spawn(function()

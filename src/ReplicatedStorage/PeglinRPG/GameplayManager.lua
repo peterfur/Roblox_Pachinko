@@ -164,90 +164,314 @@ function GameplayManager:changePhase(newPhase)
 	return self.phaseManager:changePhase(newPhase)
 end
 
--- Maneja el lanzamiento de un orbe
--- Modificación de la función launchOrb en GameplayManager para hacerla más robusta
+-- Función corregida de lanzamiento con manejo de errores mejorado
 function GameplayManager:launchOrb()
-    -- Verificaciones iniciales...
+    -- Verificar que tenemos un orbe para lanzar
+    if not self.visualElements.currentOrbVisual then
+        print("No hay orbe para lanzar")
+        return false
+    end
     
-    -- Seleccionar aleatoriamente uno de los tres tubos de lanzamiento
+    -- ARREGLO: Verificar que tenemos puntos de entrada válidos
+    if not self.boardManager or not self.boardManager.entryPoints then
+        warn("BoardManager o entryPoints no están disponibles")
+        
+        -- Lanzamiento de emergencia desde una posición fija
+        local orbVisual = self.visualElements.currentOrbVisual
+        orbVisual.Position = Vector3.new(0, 20, 0)
+        
+        -- Dirección hacia abajo con componente aleatorio
+        local angle = math.rad(math.random(-15, 15))
+        local direction = Vector3.new(math.sin(angle), -math.cos(angle), 0)
+        
+        -- Aplicar impulso de emergencia
+        local baseSpeed = 35
+        local initialVelocity = direction * baseSpeed
+        orbVisual:ApplyImpulse(initialVelocity * orbVisual:GetMass())
+        
+        -- Configurar colisiones y continuar
+        local currentOrb = self.orbManager:getCurrentOrbInfo()
+        self.combatManager:setupOrbCollisions(orbVisual, currentOrb)
+        self.visualElements.currentOrbVisual = nil
+        self.uiManager:updateUI()
+        
+        return true
+    end
+    
+    -- Verificar que hay entryPoints disponibles
+    if #self.boardManager.entryPoints == 0 then
+        warn("No hay puntos de entrada disponibles")
+        
+        -- Mismo código de emergencia que arriba
+        local orbVisual = self.visualElements.currentOrbVisual
+        orbVisual.Position = Vector3.new(0, 20, 0)
+        
+        -- Dirección hacia abajo con componente aleatorio
+        local angle = math.rad(math.random(-15, 15))
+        local direction = Vector3.new(math.sin(angle), -math.cos(angle), 0)
+        
+        -- Aplicar impulso de emergencia
+        local baseSpeed = 35
+        local initialVelocity = direction * baseSpeed
+        orbVisual:ApplyImpulse(initialVelocity * orbVisual:GetMass())
+        
+        -- Configurar colisiones y continuar
+        local currentOrb = self.orbManager:getCurrentOrbInfo()
+        self.combatManager:setupOrbCollisions(orbVisual, currentOrb)
+        self.visualElements.currentOrbVisual = nil
+        self.uiManager:updateUI()
+        
+        return true
+    end
+    
+    -- ARREGLO: Seleccionar aleatoriamente uno de los tubos de lanzamiento con mejor validación
     local entryPointIndex = math.random(1, #self.boardManager.entryPoints)
     local entryPoint = self.boardManager.entryPoints[entryPointIndex]
     
-    -- Configurar ángulos específicos para cada tubo para asegurar que las bolas caigan dentro del panel
+    -- Verificar que el entryPoint existe y tiene posición
+    if not entryPoint then
+        warn("Punto de entrada no válido en índice: " .. entryPointIndex)
+        
+        -- Usar el primer punto de entrada disponible o fallar con elegancia
+        entryPoint = self.boardManager.entryPoints[1]
+        if not entryPoint then
+            warn("No se pudo encontrar un punto de entrada válido")
+            
+            -- Código de emergencia similar a lo anterior
+            local orbVisual = self.visualElements.currentOrbVisual
+            orbVisual.Position = Vector3.new(0, 20, 0)
+            
+            -- Aplicar impulso de emergencia
+            local direction = Vector3.new(0, -1, 0)
+            local baseSpeed = 35
+            local initialVelocity = direction * baseSpeed
+            orbVisual:ApplyImpulse(initialVelocity * orbVisual:GetMass())
+            
+            -- Configurar colisiones y continuar
+            local currentOrb = self.orbManager:getCurrentOrbInfo()
+            self.combatManager:setupOrbCollisions(orbVisual, currentOrb)
+            self.visualElements.currentOrbVisual = nil
+            self.uiManager:updateUI()
+            
+            return true
+        end
+    end
+    
+    -- VERIFICAR QUE EL PUNTO DE ENTRADA TIENE LA PROPIEDAD POSITION
+    local entryPosition
+    if entryPoint:GetAttribute("LaunchPosition") then
+        -- Obtener posición desde el atributo si existe
+        local posX = entryPoint:GetAttribute("LaunchPositionX") or 0
+        local posY = entryPoint:GetAttribute("LaunchPositionY") or 20
+        local posZ = entryPoint:GetAttribute("LaunchPositionZ") or 0
+        entryPosition = Vector3.new(posX, posY, posZ)
+    elseif entryPoint.Position then
+        -- Usar directamente la propiedad Position si existe
+        entryPosition = entryPoint.Position
+    else
+        -- Posición de respaldo si no se encuentra ninguna
+        warn("El punto de entrada no tiene una posición válida, usando posición por defecto")
+        entryPosition = Vector3.new(0, 20, 0)
+    end
+    
+    -- ARREGLO: Configurar ángulos específicos para cada tubo para asegurar que las bolas caigan correctamente
     local angleRanges = {
-        {min = -45, max = 0},    -- Tubo izquierdo: ángulos hacia la derecha
-        {min = -20, max = 20},   -- Tubo central: ángulos más centrados
-        {min = 0, max = 45}      -- Tubo derecho: ángulos hacia la izquierda
+        {min = -30, max = -10},  -- Tubo izquierdo: ángulos hacia la derecha
+        {min = -15, max = 15},   -- Tubo central: ángulos más centrados
+        {min = 10, max = 30}     -- Tubo derecho: ángulos hacia la izquierda
     }
     
-    local angleRange = angleRanges[entryPointIndex]
+    -- Usar un rango por defecto si entryPointIndex está fuera de rango
+    local angleRange = angleRanges[entryPointIndex] or {min = -15, max = 15}
     local angle = math.rad(math.random(angleRange.min, angleRange.max))
     
-    -- Siempre apuntar hacia abajo, con componente horizontal variable
+    -- ARREGLO: Vector de dirección ajustado para asegurar que el orbe baje al tablero
     local direction = Vector3.new(math.sin(angle), -math.cos(angle), 0)
     
     print("Lanzando orbe desde tubo " .. entryPointIndex .. " con ángulo " .. math.deg(angle))
     
+    -- ARREGLO: Crear efecto de pre-lanzamiento (con validación)
+    local function preLaunchEffect()
+        -- Validar que todo existe antes de crear efectos
+        if not entryPosition then return end
+        
+        -- Crear un destello en el tubo
+        local flash = Instance.new("Part")
+        flash.Shape = Enum.PartType.Ball
+        flash.Size = Vector3.new(3, 3, 3)
+        flash.Position = entryPosition
+        flash.Anchored = true
+        flash.CanCollide = false
+        flash.Transparency = 0.3
+        flash.Material = Enum.Material.Neon
+        
+        -- Color basado en el orbe actual
+        local currentOrb = self.orbManager:getCurrentOrbInfo()
+        if currentOrb and currentOrb.color then
+            flash.Color = currentOrb.color
+        else
+            flash.Color = Color3.fromRGB(255, 255, 255)
+        end
+        flash.Parent = workspace
+        
+        -- Animación del destello
+        spawn(function()
+            for i = 1, 8 do
+                if not flash or not flash.Parent then break end
+                flash.Size = Vector3.new(3 + i*0.2, 3 + i*0.2, 3 + i*0.2)
+                flash.Transparency = 0.3 + (i * 0.08)
+                wait(0.02)
+            end
+            if flash and flash.Parent then
+                flash:Destroy()
+            end
+        end)
+        
+        -- Sonido de lanzamiento
+        local launchSound = Instance.new("Sound")
+        launchSound.SoundId = "rbxassetid://1080752200" -- Sonido whoosh
+        launchSound.Volume = 0.8
+        launchSound.PlaybackSpeed = math.random(95, 105) / 100
+        
+        -- Verificar que entryPoint existe antes de asignar parent
+        if typeof(entryPoint) == "Instance" and entryPoint.Parent then
+            launchSound.Parent = entryPoint
+        else
+            launchSound.Parent = workspace
+        end
+        
+        launchSound:Play()
+        
+        -- Auto-destrucción del sonido
+        game:GetService("Debris"):AddItem(launchSound, 2)
+    end
+    
+    -- Ejecutar efecto de pre-lanzamiento (protegido contra errores)
+    pcall(function() 
+        preLaunchEffect() 
+    end)
+    
     -- Obtener el orbe actual y posicionarlo en el punto de lanzamiento
     local orbVisual = self.visualElements.currentOrbVisual
-    orbVisual.Position = entryPoint.Position
     
-    -- Resto del código de lanzamiento...
+    -- Verificar que el orbe existe antes de continuar
+    if not orbVisual or not orbVisual.Parent then
+        warn("El orbe visual no existe o ha perdido su referencia")
+        return false
+    end
+    
+    -- Posicionar el orbe de manera segura
+    orbVisual.Position = entryPosition
+    
+    -- ARREGLO: Dar tiempo para que el efecto sea visible antes del lanzamiento
+    wait(0.1)
+    
+    -- Obtener información del orbe actual
     local currentOrb = self.orbManager:getCurrentOrbInfo()
     
-    -- Ajustar velocidad de lanzamiento - aumentarla un poco para asegurar que tenga suficiente fuerza
-    local initialVelocity = direction * (Config.PHYSICS.BALL_SPEED * 1.2)
+    -- ARREGLO: Ajustar velocidad de lanzamiento para una experiencia más consistente
+    local baseSpeed = 35
+    if Config and Config.PHYSICS and Config.PHYSICS.BALL_SPEED then
+        baseSpeed = Config.PHYSICS.BALL_SPEED
+    end
     
-    -- Reducir el factor aleatorio para más consistencia
-    local randomFactor = 0.02
+    -- Calcular velocidad inicial
+    local initialVelocity = direction * baseSpeed
+    
+    -- ARREGLO: Reducir el factor aleatorio para más consistencia pero mantener algo de variabilidad
+    local randomFactor = 0.01
     local randomOffset = Vector3.new(
         (math.random() * 2 - 1) * randomFactor,
         (math.random() * 2 - 1) * randomFactor,
         0
     )
     
-    initialVelocity = initialVelocity + randomOffset
+    initialVelocity = initialVelocity + (randomOffset * baseSpeed)
     
-    -- Aplicar fuerza al orbe con masa ajustada para mejor comportamiento
-    orbVisual:ApplyImpulse(initialVelocity * orbVisual:GetMass())
+    -- ARREGLO: Asegurar que la masa del orbe es correcta para la física
+    if orbVisual:GetMass() < 0.1 then
+        -- Prevenir problemas con masas muy pequeñas
+        orbVisual:SetMass(1)
+    end
     
-    -- Añadir un pequeño torque (giro) para comportamiento más realista
-    orbVisual:ApplyAngularImpulse(Vector3.new(math.random(-5, 5), math.random(-5, 5), math.random(-5, 5)))
-
-    -- Disparar eventos
-    for _, callback in ipairs(self.events.onOrbLaunched) do
-        callback(currentOrb, direction)
+    -- ARREGLO: Aplicar impulso con mejor física y manejo de errores
+    local success, errorMsg = pcall(function()
+        orbVisual:ApplyImpulse(initialVelocity * orbVisual:GetMass())
+        
+        -- ARREGLO: Añadir un pequeño torque controlado para giro natural
+        local torqueMagnitude = 3 -- Reducido para un giro más controlado
+        orbVisual:ApplyAngularImpulse(Vector3.new(
+            math.random(-torqueMagnitude, torqueMagnitude), 
+            math.random(-torqueMagnitude, torqueMagnitude), 
+            math.random(-torqueMagnitude * 3, torqueMagnitude * 3) -- Mayor en Z para giro visible
+        ))
+    end)
+    
+    if not success then
+        warn("Error al aplicar física al orbe: " .. tostring(errorMsg))
+        
+        -- Alternativa si ApplyImpulse falla - establecer velocidad directamente
+        orbVisual.Velocity = initialVelocity
     end
 
-    -- Configurar detección de colisiones a través del gestor de combate
-    self.combatManager:setupOrbCollisions(orbVisual, currentOrb)
+    -- Disparar eventos
+    if #self.events.onOrbLaunched > 0 then
+        for _, callback in ipairs(self.events.onOrbLaunched) do
+            pcall(function() 
+                callback(currentOrb, direction) 
+            end)
+        end
+    end
 
+    -- ARREGLO: Configurar detección de colisiones
+    if self.combatManager then
+        pcall(function() 
+            self.combatManager:setupOrbCollisions(orbVisual, currentOrb) 
+        end)
+    else
+        warn("CombatManager no disponible")
+    end
+    
     -- Limpiar referencia (ahora se controlará por física)
     self.visualElements.currentOrbVisual = nil
 
     -- Actualizar UI
-    self.uiManager:updateUI()
+    if self.uiManager then
+        pcall(function() 
+            self.uiManager:updateUI() 
+        end)
+    end
 
-    -- Añadir efecto visual de lanzamiento
-    local launchEffect = Instance.new("Part")
-    launchEffect.Shape = Enum.PartType.Ball
-    launchEffect.Size = Vector3.new(1, 1, 1)
-    launchEffect.Position = orbVisual.Position
-    launchEffect.Anchored = true
-    launchEffect.CanCollide = false
-    launchEffect.Transparency = 0.5
-    launchEffect.Material = Enum.Material.Neon
-    launchEffect.Color = orbVisual.Color
-    launchEffect.Parent = workspace
-    
-    -- Animar el efecto de lanzamiento
-    spawn(function()
-        for i = 1, 10 do
-            launchEffect.Size = Vector3.new(1 + i*0.3, 1 + i*0.3, 1 + i*0.3)
-            launchEffect.Transparency = 0.5 + (i * 0.05)
-            wait(0.03)
-        end
-        launchEffect:Destroy()
+    -- ARREGLO: Añadir efecto visual de lanzamiento mejorado
+    pcall(function()
+        local launchEffect = Instance.new("Part")
+        launchEffect.Shape = Enum.PartType.Ball
+        launchEffect.Size = Vector3.new(1, 1, 1)
+        launchEffect.Position = entryPosition
+        launchEffect.Anchored = true
+        launchEffect.CanCollide = false
+        launchEffect.Transparency = 0.3
+        launchEffect.Material = Enum.Material.Neon
+        launchEffect.Color = orbVisual.Color
+        launchEffect.Parent = workspace
+        
+        spawn(function()
+            for i = 1, 12 do
+                if not launchEffect or not launchEffect.Parent then break end
+                launchEffect.Size = Vector3.new(1 + i*0.3, 1 + i*0.3, 1 + i*0.3)
+                launchEffect.Transparency = 0.3 + (i * 0.06)
+                
+                -- Mover levemente en dirección del lanzamiento de manera segura
+                if launchEffect and launchEffect.Parent then
+                    launchEffect.Position = entryPosition + (direction * i * 0.2)
+                end
+                
+                wait(0.02)
+            end
+            if launchEffect and launchEffect.Parent then
+                launchEffect:Destroy()
+            end
+        end)
     end)
 
     return true

@@ -16,15 +16,17 @@ function EffectsManager.new(gameplayManager)
 	return self
 end
 
--- Muestra un número de daño flotante
-function EffectsManager:showDamageNumber(position, amount, isCritical)
+-- EffectsManager.lua: Mejoras para mostrar mensajes de daño personalizados
+
+-- ARREGLO: Modificar la función para mostrar números de daño y permitir mensajes personalizados
+function EffectsManager:showDamageNumber(position, amount, isCritical, customMessage)
 	-- Crear el indicador visual
 	local damageText = Instance.new("BillboardGui")
-	damageText.Size = UDim2.new(0, 100, 0, 40)
+	damageText.Size = UDim2.new(0, 200, 0, 60)  -- Más grande para mayor visibilidad
 	damageText.StudsOffset = Vector3.new(0, 2, 0)
 	damageText.Adornee = nil -- No adjuntar a ningún objeto
 	damageText.AlwaysOnTop = true
-	damageText.MaxDistance = 50
+	damageText.MaxDistance = 100 -- Visible desde más lejos
 	damageText.Parent = workspace
 
 	-- Posicionar correctamente
@@ -36,33 +38,63 @@ function EffectsManager:showDamageNumber(position, amount, isCritical)
 	-- Texto con el daño
 	local textLabel = Instance.new("TextLabel")
 	textLabel.Size = UDim2.new(1, 0, 1, 0)
-	textLabel.BackgroundTransparency = 1
+	textLabel.BackgroundTransparency = customMessage and 0.3 or 1  -- Fondo para mensajes personalizados
+	textLabel.BackgroundColor3 = customMessage and Color3.fromRGB(50, 50, 50) or Color3.fromRGB(0, 0, 0)
 	textLabel.TextScaled = true
 	textLabel.Font = Enum.Font.SourceSansBold
-	textLabel.Text = tostring(amount)
-
-	-- Color basado en la fuerza del daño/crítico
-	if isCritical then
-		textLabel.TextColor3 = Color3.fromRGB(255, 50, 50) -- Rojo para críticos
-		textLabel.Text = textLabel.Text .. "!"
+	
+	-- Si hay mensaje personalizado, mostrarlo en lugar del daño
+	if customMessage then
+		textLabel.Text = customMessage
+		textLabel.TextColor3 = Color3.fromRGB(255, 255, 100) -- Amarillo para mensajes automáticos
 	else
-		textLabel.TextColor3 = Color3.fromRGB(255, 255, 255) -- Blanco para normal
+		textLabel.Text = tostring(amount)
+		
+		-- Color basado en la fuerza del daño/crítico
+		if isCritical then
+			textLabel.TextColor3 = Color3.fromRGB(255, 50, 50) -- Rojo para críticos
+			textLabel.Text = textLabel.Text .. "!"
+		else
+			textLabel.TextColor3 = Color3.fromRGB(255, 255, 255) -- Blanco para normal
+		end
 	end
+	
+	-- Añadir sombra del texto para mejor legibilidad
+	textLabel.TextStrokeTransparency = 0.5
+	textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
 
 	textLabel.Parent = damageText
 
-	-- Animación del texto de daño
+	-- Animación del texto de daño mejorada
 	spawn(function()
+		-- Seleccionar una dirección ligeramente aleatoria para más naturalidad
+		local xOffset = 0
+		if customMessage then
+			xOffset = 0
+		else
+			xOffset = math.random(-10, 10)
+		end
+		
 		for i = 1, 20 do
-			textLabel.Position = UDim2.new(0, 0, 0, -i*2)
+			textLabel.Position = UDim2.new(0, xOffset * (i/10), 0, -i*2)
 			textLabel.TextTransparency = i / 20
+			
+			if not customMessage then
+				-- Efecto de escala para daño normal
+				local scale = 1 + (0.3 * (1 - i/20))
+				textLabel.Size = UDim2.new(scale, 0, scale, 0)
+			end
+			
+			if textLabel.BackgroundTransparency < 1 then
+				textLabel.BackgroundTransparency = textLabel.BackgroundTransparency + (i / 20)
+			end
+			
 			wait(0.05)
 		end
 		damageText:Destroy()
 		attachment:Destroy()
 	end)
 end
-
 -- Muestra efectos visuales según el tipo de orbe
 function EffectsManager:showOrbEffect(orbType, position)
 	if orbType == "FIRE" then

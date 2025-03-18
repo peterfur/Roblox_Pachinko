@@ -9,18 +9,29 @@ Config.GAME = {
 	DEBUG_MODE = true,
 }
 
--- Configuración de la física
-Config.PHYSICS = {
-	BALL_SPEED = 35,
-	BOUNCE_REDUCTION = 0.9,
-	MIN_BOUNCE_VELOCITY = 5,
-	GRAVITY = 130,
-	BALL_ELASTICITY = 0.8,
-	BALL_DENSITY = 1.2,
-	BALL_WEIGHT = 0.4,
-	BALL_FRICTION = 0.3,
-}
+-- Configuración de PHYSICS optimizada para evitar que las bolas se escapen y mejorar el feedback
 
+Config.PHYSICS = {
+    BALL_SPEED = 32,         -- Velocidad base ligeramente reducida para mayor control
+    BOUNCE_REDUCTION = 0.8,  -- Mayor reducción de rebote para evitar rebotes infinitos
+    MIN_BOUNCE_VELOCITY = 2, -- Velocidad mínima reducida para detectar antes cuando se detiene
+    GRAVITY = 100,           -- Gravedad reducida para movimiento más predecible
+    BALL_ELASTICITY = 0.6,   -- Elasticidad reducida para evitar rebotes excesivos
+    BALL_DENSITY = 2.5,      -- Densidad aumentada para mayor estabilidad
+    BALL_WEIGHT = 1.0,       -- Peso aumentado para reducir rebotes erráticos
+    BALL_FRICTION = 0.2,     -- Fricción reducida para facilitar el movimiento
+    
+    -- ARREGLO: Nuevos parámetros para mejor comportamiento
+    COLLISION_COOLDOWN = 0.1,   -- Tiempo mínimo entre colisiones repetidas con el mismo objeto
+    COLLISION_FORCE = 1.2,      -- Multiplicador de fuerza en colisiones
+    STUCK_CHECK_DELAY = 0.5,    -- Tiempo para verificar si un orbe está atascado
+    STUCK_VELOCITY_THRESHOLD = 1.0, -- Umbral de velocidad para considerar un orbe atascado
+    AUTO_UNSTUCK_FORCE = 5.0,   -- Fuerza para desatascar automáticamente un orbe
+    
+    -- ARREGLO: Parámetros para garantizar que siempre haga daño
+    MIN_GUARANTEED_DAMAGE = 10, -- Daño mínimo que siempre se aplicará aunque no golpee nada
+    DAMAGE_TIMEOUT_SECONDS = 3, -- Tiempo después del cual se garantiza daño si no ha golpeado nada
+}
 -- Configuración del tablero
 Config.BOARD = {
 	WIDTH = 60,
