@@ -1,12 +1,11 @@
 -- OrbService.lua
--- Servicio que gestiona los orbes y sus efectos
--- Reemplaza al anterior OrbManager con una arquitectura más estructurada
+-- Versión simplificada del servicio que gestiona los orbes y sus efectos
+-- Esta versión es un fallback básico para cuando el servicio original no está disponible
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- Importar dependencias
 local ServiceInterface = require(ReplicatedStorage:WaitForChild("PeglinRPG"):WaitForChild("Services"):WaitForChild("ServiceInterface"))
-local Config = require(ReplicatedStorage:WaitForChild("PeglinRPG"):WaitForChild("Config"))
 
 -- Definición del OrbService
 local OrbService = ServiceInterface:Extend("OrbService")
@@ -28,6 +27,8 @@ function OrbService.new(serviceLocator, eventBus)
     -- Subscripciones a eventos
     self.eventSubscriptions = {}
     
+    print("OrbService (simplificado): Creado")
+    
     return self
 end
 
@@ -36,10 +37,6 @@ function OrbService:Initialize()
     ServiceInterface.Initialize(self)
     
     -- Suscribirse a eventos
-    table.insert(self.eventSubscriptions, self.eventBus:Subscribe("BattleStarted", function(playerManager)
-        self:initializeBattlePool(playerManager)
-    end))
-    
     table.insert(self.eventSubscriptions, self.eventBus:Subscribe("PlayerTurnStarted", function()
         self:selectNextOrb()
     end))
@@ -48,17 +45,20 @@ function OrbService:Initialize()
         self.activeOrbVisual = nil
     end))
     
-    print("OrbService: Inicializado correctamente")
+    print("OrbService (simplificado): Inicializado correctamente")
 end
 
 -- Inicializa el pool de orbes para una batalla
 function OrbService:initializeBattlePool(playerManager)
-    self.orbPoolForBattle = {}
+    self.orbPoolForBattle = {"BASIC", "BASIC", "BASIC"}
     
-    -- Copiar todos los orbes del jugador al pool de batalla
-    for _, orbData in ipairs(playerManager.inventory.orbs) do
-        for i = 1, orbData.count do
-            table.insert(self.orbPoolForBattle, orbData.type)
+    -- Si tenemos playerManager, intentamos usar su inventario
+    if playerManager and playerManager.inventory and playerManager.inventory.orbs then
+        self.orbPoolForBattle = {}
+        for _, orbData in ipairs(playerManager.inventory.orbs) do
+            for i = 1, orbData.count or 1 do
+                table.insert(self.orbPoolForBattle, orbData.type)
+            end
         end
     end
     
@@ -104,7 +104,36 @@ end
 
 -- Crea una instancia específica de orbe según su tipo
 function OrbService:createOrbInstance(orbType)
-    local orbConfig = Config.ORBS[orbType] or Config.ORBS.BASIC
+    -- Configuraciones básicas para diferentes tipos de orbes
+    local orbConfigs = {
+        BASIC = {
+            NAME = "Orbe Básico",
+            DESCRIPTION = "Un orbe básico que causa daño normal.",
+            COLOR = Color3.fromRGB(255, 255, 0),
+            DAMAGE_MODIFIER = 1.0,
+        },
+        FIRE = {
+            NAME = "Orbe de Fuego",
+            DESCRIPTION = "Incendia al enemigo, causando daño a lo largo del tiempo.",
+            COLOR = Color3.fromRGB(255, 100, 0),
+            DAMAGE_MODIFIER = 0.8,
+            SPECIAL_EFFECT = "DOT",
+            DOT_DAMAGE = 5,
+            DOT_DURATION = 3,
+        },
+        ICE = {
+            NAME = "Orbe de Hielo",
+            DESCRIPTION = "Ralentiza al enemigo, reduciendo su daño.",
+            COLOR = Color3.fromRGB(100, 200, 255),
+            DAMAGE_MODIFIER = 0.7,
+            SPECIAL_EFFECT = "SLOW",
+            SLOW_AMOUNT = 0.3,
+            SLOW_DURATION = 2,
+        }
+    }
+    
+    -- Usar configuración básica si el tipo no está definido
+    local orbConfig = orbConfigs[orbType] or orbConfigs.BASIC
     
     local orbInstance = {
         type = orbType,
@@ -119,8 +148,6 @@ function OrbService:createOrbInstance(orbType)
         dotDuration = orbConfig.DOT_DURATION,
         slowAmount = orbConfig.SLOW_AMOUNT,
         slowDuration = orbConfig.SLOW_DURATION,
-        chainCount = orbConfig.CHAIN_COUNT,
-        chainRadius = orbConfig.CHAIN_RADIUS,
         
         -- Contador para estadísticas
         pegHits = 0,
@@ -146,98 +173,20 @@ function OrbService:createOrbVisual(orbInstance, position)
     ball.Position = position or Vector3.new(0, 15, 0)
     
     -- Aplicar color según tipo de orbe
-    local color = orbInstance.color
+    local color = orbInstance.color or Color3.fromRGB(255, 255, 0)
     ball.Color = color
     ball.Material = Enum.Material.Neon
     
-    -- Propiedades físicas mejoradas
+    -- Propiedades físicas
     ball.Anchored = false
     ball.CanCollide = true
     ball.CustomPhysicalProperties = PhysicalProperties.new(
-        1.5,   -- Densidad (aumentada)
-        0.4,   -- Fricción (aumentada)
-        0.7,   -- Elasticidad (reducida)
-        0.6,   -- Peso (aumentado)
-        0.6    -- Fricción rotacional (aumentada)
+        1.5,   -- Densidad
+        0.4,   -- Fricción
+        0.7,   -- Elasticidad
+        0.6,   -- Peso
+        0.6    -- Fricción rotacional
     )
-    
-    -- Efectos visuales según tipo
-    if orbInstance.type == "FIRE" then
-        -- Efecto de fuego
-        local fire = Instance.new("Fire")
-        fire.Heat = 5
-        fire.Size = 3
-        fire.Color = Color3.fromRGB(255, 100, 0)
-        fire.SecondaryColor = Color3.fromRGB(255, 200, 0)
-        fire.Parent = ball
-        
-    elseif orbInstance.type == "ICE" then
-        -- Efecto de hielo (partículas)
-        local sparkles = Instance.new("ParticleEmitter")
-        sparkles.Color = ColorSequence.new(Color3.fromRGB(200, 240, 255))
-        sparkles.LightEmission = 0.5
-        sparkles.LightInfluence = 0
-        sparkles.Size = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.2),
-            NumberSequenceKeypoint.new(1, 0)
-        })
-        sparkles.Texture = "rbxassetid://6883806171"
-        sparkles.Rate = 20
-        sparkles.Lifetime = NumberRange.new(1, 2)
-        sparkles.Speed = NumberRange.new(1, 3)
-        sparkles.SpreadAngle = Vector2.new(180, 180)
-        sparkles.Parent = ball
-        
-    elseif orbInstance.type == "LIGHTNING" then
-        -- Efecto eléctrico
-        for i = 1, 3 do
-            local beam = Instance.new("Beam")
-            local a0 = Instance.new("Attachment")
-            local a1 = Instance.new("Attachment")
-            
-            a0.Position = Vector3.new(0, 0, 0)
-            a1.Position = Vector3.new(math.random(-1, 1), math.random(-1, 1), math.random(-1, 1)).Unit * 1.25
-            
-            a0.Parent = ball
-            a1.Parent = ball
-            
-            beam.Attachment0 = a0
-            beam.Attachment1 = a1
-            beam.Width0 = 0.1
-            beam.Width1 = 0.05
-            beam.LightEmission = 1
-            beam.FaceCamera = true
-            beam.Color = ColorSequence.new(Color3.fromRGB(150, 150, 255))
-            beam.Texture = "rbxassetid://6883560644"
-            beam.TextureLength = 0.5
-            beam.TextureSpeed = 2
-            beam.Parent = ball
-        end
-        
-    elseif orbInstance.type == "VOID" then
-        -- Efecto de vacío
-        local attachment = Instance.new("Attachment")
-        attachment.Parent = ball
-        
-        local particleEmitter = Instance.new("ParticleEmitter")
-        particleEmitter.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(150, 0, 150)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(50, 0, 50))
-        })
-        particleEmitter.LightEmission = 0.5
-        particleEmitter.LightInfluence = 0
-        particleEmitter.Size = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.5),
-            NumberSequenceKeypoint.new(0.5, 0.25),
-            NumberSequenceKeypoint.new(1, 0)
-        })
-        particleEmitter.Texture = "rbxassetid://6883844004"
-        particleEmitter.Rate = 25
-        particleEmitter.Lifetime = NumberRange.new(0.5, 1)
-        particleEmitter.Speed = NumberRange.new(1, 3)
-        particleEmitter.SpreadAngle = Vector2.new(180, 180)
-        particleEmitter.Parent = attachment
-    end
     
     -- Efecto de estela para todos los orbes
     local attachment0 = Instance.new("Attachment")
@@ -281,7 +230,7 @@ function OrbService:createOrbVisual(orbInstance, position)
     textLabel.BackgroundTransparency = 1
     textLabel.TextScaled = true
     textLabel.Font = Enum.Font.SourceSansBold
-    textLabel.Text = orbInstance.name
+    textLabel.Text = orbInstance.name or "Orbe"
     textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     textLabel.TextStrokeTransparency = 0.5
     textLabel.Parent = nameLabel
@@ -310,43 +259,30 @@ function OrbService:processPegHit(orbInstance, pegInstance, enemyManager)
         orbInstance.criticalHits = orbInstance.criticalHits + 1
     end
     
-    -- Calcular daño base
-    local baseDamage = Config.COMBAT.BASE_DAMAGE * orbInstance.damageModifier
+    -- Calcular daño base (valores por defecto si no hay Config)
+    local baseDamage = 10 * (orbInstance.damageModifier or 1.0)
+    local criticalMultiplier = 2.5
+    
+    -- Intentar obtener configuración si está disponible
+    local success, Config = pcall(function()
+        return require(ReplicatedStorage:WaitForChild("PeglinRPG"):WaitForChild("Config"))
+    end)
+    
+    if success and Config and Config.COMBAT then
+        baseDamage = Config.COMBAT.BASE_DAMAGE * (orbInstance.damageModifier or 1.0)
+        criticalMultiplier = Config.COMBAT.CRITICAL_MULTIPLIER
+    end
+    
     if isCritical then
-        baseDamage = baseDamage * Config.COMBAT.CRITICAL_MULTIPLIER
+        baseDamage = baseDamage * criticalMultiplier
     end
     
     -- Aplicar efectos especiales según tipo de orbe
-    if orbInstance.specialEffect == "DOT" and orbInstance.dotDamage and orbInstance.dotDuration then
+    if orbInstance.specialEffect == "DOT" and orbInstance.dotDamage and orbInstance.dotDuration and enemyManager then
         -- Daño a lo largo del tiempo (fuego)
-        enemyManager:applyEffect("BURN", orbInstance.dotDuration, orbInstance.dotDamage)
-    end
-    
-    if orbInstance.specialEffect == "SLOW" and orbInstance.slowAmount and orbInstance.slowDuration then
-        -- Ralentizar enemigo (hielo)
-        enemyManager:applyEffect("SLOW", orbInstance.slowDuration, orbInstance.slowAmount)
-    end
-    
-    if orbInstance.specialEffect == "CHAIN" and orbInstance.chainCount and orbInstance.chainRadius then
-        -- Golpear clavijas adicionales (electricidad)
-        -- Esta parte necesitaría implementación con el BoardService
-        -- para encontrar clavijas cercanas a la golpeada
-        local boardService = self.serviceLocator:GetService("BoardService")
-        
-        -- Solo ejecutar lógica de cadena si el BoardService está disponible
-        if boardService then
-            -- Publicar evento para que BoardService maneje la cadena
-            self.eventBus:Publish("ChainEffectRequested", 
-                pegInstance.Position, 
-                orbInstance.chainRadius,
-                orbInstance.chainCount
-            )
+        if type(enemyManager.applyEffect) == "function" then
+            enemyManager:applyEffect("BURN", orbInstance.dotDuration, orbInstance.dotDamage)
         end
-    end
-    
-    if orbInstance.specialEffect == "PENETRATE" then
-        -- Ignora defensa (vacío)
-        return "PENETRATE", baseDamage
     end
     
     -- Actualizar daño total causado

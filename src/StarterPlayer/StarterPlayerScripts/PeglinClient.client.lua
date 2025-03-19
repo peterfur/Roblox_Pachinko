@@ -16,9 +16,11 @@ local isGameRunning = false
 local launchReady = true
 local orbLaunchCooldown = 1 -- Segundos entre lanzamientos
 
+-- Referencias a UI
+local ui = nil
+
 -- Logs
 print("PeglinClient: Iniciando...")
-print("PeglinClient: Estado inicial - isInitialized:", isInitialized, "isGameRunning:", isGameRunning, "launchReady:", launchReady)
 
 -- Función para esperar módulos con timeout
 local function waitForModule(path, timeout)
@@ -108,50 +110,40 @@ local function initialize()
     
     EventBus = result
     print("PeglinClient: EventBus cargado correctamente")
-    print("PeglinClient: Preparando suscripciones de eventos")
-
+    
     -- Crear interfaz de usuario
-    local ui = createLaunchUI()
+    ui = createLaunchUI()
     
     -- Suscribirse a eventos de estado del juego
     EventBus:Subscribe("GameStarted", function()
-        print("PeglinClient: Evento GameStarted recibido")
         isGameRunning = true
         ui.label.Text = "¡Haga clic para lanzar un orbe!"
         ui.label.BackgroundColor3 = Color3.fromRGB(30, 100, 30)
-        print("PeglinClient: Juego iniciado, esperando lanzamientos - isGameRunning:", isGameRunning, "launchReady:", launchReady)
+        print("PeglinClient: Juego iniciado, esperando lanzamientos")
     end)
     
     EventBus:Subscribe("GameEnded", function()
-        print("PeglinClient: Evento GameEnded recibido")
         isGameRunning = false
         ui.label.Text = "Juego terminado"
         ui.label.BackgroundColor3 = Color3.fromRGB(100, 30, 30)
-        print("PeglinClient: Juego terminado - isGameRunning:", isGameRunning)
     end)
     
     EventBus:Subscribe("PlayerTurnStarted", function()
-        print("PeglinClient: Evento PlayerTurnStarted recibido")
         launchReady = true
         ui.label.Text = "¡Su turno! Haga clic para lanzar un orbe"
         ui.label.BackgroundColor3 = Color3.fromRGB(30, 100, 30)
-        print("PeglinClient: Turno del jugador iniciado - launchReady:", launchReady)
     end)
     
     EventBus:Subscribe("EnemyTurnStarted", function()
-        print("PeglinClient: Evento EnemyTurnStarted recibido")
         launchReady = false
         ui.label.Text = "Turno del enemigo..."
         ui.label.BackgroundColor3 = Color3.fromRGB(100, 30, 30)
-        print("PeglinClient: Turno del enemigo iniciado - launchReady:", launchReady)
     end)
     
     EventBus:Subscribe("OrbLaunched", function()
-        print("PeglinClient: Evento OrbLaunched recibido")
         launchReady = false
         ui.label.Text = "Orbe en movimiento..."
         ui.label.BackgroundColor3 = Color3.fromRGB(30, 30, 100)
-        print("PeglinClient: Orbe lanzado - launchReady:", launchReady)
         
         -- Programar recuperación del lanzamiento
         spawn(function()
@@ -160,72 +152,71 @@ local function initialize()
             if isGameRunning then
                 ui.label.Text = "¡Listo para lanzar!"
                 ui.label.BackgroundColor3 = Color3.fromRGB(30, 100, 30)
-                print("PeglinClient: Cooldown completado - launchReady:", launchReady)
             end
         end)
     end)
-
+    
     -- Controlar el lanzamiento de orbes mediante clics
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        print("PeglinClient: Entrada detectada -", input.UserInputType.Name, "- gameProcessed:", gameProcessed)
-        
         if gameProcessed then return end
         
         local isValidInput = 
             input.UserInputType == Enum.UserInputType.MouseButton1 or 
             input.UserInputType == Enum.UserInputType.Touch
         
-        if isValidInput then
-            print("PeglinClient: Entrada válida detectada - isGameRunning:", isGameRunning, "launchReady:", launchReady)
+        if isValidInput and isGameRunning and launchReady then
+            -- Mostrar estado actual
+            print("PeglinClient: Lanzamiento solicitado. Estado del juego:", isGameRunning, "Lanzamiento listo:", launchReady)
             
-            if isGameRunning and launchReady then
-                -- Instrucciones de depuración ampliadas
-                print("PeglinClient: Lanzamiento solicitado. Estado del juego:", isGameRunning, "Lanzamiento listo:", launchReady)
-                
-                -- Obtener dirección del clic
-                local mousePosition = UserInputService:GetMouseLocation()
-                local viewportSize = workspace.CurrentCamera.ViewportSize
-                
-                -- Calcular dirección normalizada (centro de la pantalla como origen)
-                local directionX = (mousePosition.X - viewportSize.X/2) / (viewportSize.X/2)
-                local directionY = (mousePosition.Y - viewportSize.Y/2) / (viewportSize.Y/2)
-                
-                -- La dirección estará entre -1 y 1 en ambos ejes, normalizar
-                local direction = Vector3.new(directionX, -directionY, 0).Unit
-                
-                -- Asegúrate que el evento es realmente publicado:
-                print("PeglinClient: Publicando evento PlayerClickedToLaunch con dirección:", direction)
-                EventBus:Publish("PlayerClickedToLaunch", direction)
-                
-                -- Verificar suscriptores
-                print("Suscriptores para PlayerClickedToLaunch:", EventBus:GetSubscriberCount("PlayerClickedToLaunch"))
-                
-                -- Intentar un evento alternativo como prueba
-                print("PeglinClient: Intentando publicar evento OrbLaunched como prueba")
-                EventBus:Publish("OrbLaunched", {Position = Vector3.new(0, 15, 0)}, {type = "BASIC"})
-                
-                -- Feedback visual para el usuario
-                ui.label.Text = "¡Lanzando orbe!"
-                ui.label.BackgroundColor3 = Color3.fromRGB(30, 30, 100)
-                
-                print("PeglinClient: Lanzamiento solicitado en dirección: ", direction)
-            elseif isGameRunning then
-                print("PeglinClient: No se puede lanzar porque launchReady es falso")
-                ui.label.Text = "Espere un momento..."
-                -- Pequeño efecto visual para indicar que no puede lanzar aún
-                local originalColor = ui.label.BackgroundColor3
-                ui.label.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-                spawn(function()
-                    wait(0.2)
-                    if ui and ui.label then
-                        ui.label.BackgroundColor3 = originalColor
-                    end
-                end)
-            elseif launchReady then
-                print("PeglinClient: No se puede lanzar porque isGameRunning es falso")
-            else
-                print("PeglinClient: No se puede lanzar porque ambos estados son falsos")
-            end
+            -- Obtener dirección del clic
+            local mousePosition = UserInputService:GetMouseLocation()
+            local viewportSize = workspace.CurrentCamera.ViewportSize
+            
+            -- Calcular dirección normalizada (centro de la pantalla como origen)
+            local directionX = (mousePosition.X - viewportSize.X/2) / (viewportSize.X/2)
+            local directionY = (mousePosition.Y - viewportSize.Y/2) / (viewportSize.Y/2)
+            
+            -- La dirección estará entre -1 y 1 en ambos ejes, normalizar
+            local direction = Vector3.new(directionX, -directionY, 0).Unit
+            
+            -- NUEVO: Enviar evento de prueba para verificar comunicación
+            print("PeglinClient: Enviando evento de prueba...")
+            EventBus:Publish("TestEvent", "Mensaje de prueba desde cliente")
+            
+            -- NUEVO: Logs más detallados para verificar el evento de lanzamiento
+            print("PeglinClient: Publicando evento PlayerClickedToLaunch con dirección:", direction.X, direction.Y, direction.Z)
+            print("PeglinClient: EventBus disponible:", EventBus ~= nil)
+            
+            -- Publicar evento de lanzamiento con la dirección
+            EventBus:Publish("PlayerClickedToLaunch", direction)
+            
+            -- Feedback visual para el usuario
+            ui.label.Text = "¡Lanzando orbe!"
+            ui.label.BackgroundColor3 = Color3.fromRGB(30, 30, 100)
+            
+            -- Simular la recepción del evento OrbLaunched
+            launchReady = false
+            
+            -- Programar recuperación del lanzamiento
+            spawn(function()
+                wait(orbLaunchCooldown)
+                launchReady = true
+                if isGameRunning and ui and ui.label then
+                    ui.label.Text = "¡Listo para lanzar!"
+                    ui.label.BackgroundColor3 = Color3.fromRGB(30, 100, 30)
+                end
+            end)
+        elseif isValidInput and not launchReady and isGameRunning then
+            ui.label.Text = "Espere un momento..."
+            -- Pequeño efecto visual para indicar que no puede lanzar aún
+            local originalColor = ui.label.BackgroundColor3
+            ui.label.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+            spawn(function()
+                wait(0.2)
+                if ui and ui.label then
+                    ui.label.BackgroundColor3 = originalColor
+                end
+            end)
         end
     end)
     
@@ -233,84 +224,17 @@ local function initialize()
     isInitialized = true
     print("PeglinClient: Inicializado correctamente")
     
-    -- Solicitar inicio del juego
-    print("PeglinClient: Buscando ServicesLoader")
-    local peglinRPG = ReplicatedStorage:WaitForChild("PeglinRPG")
-    local servicesLoaderSuccess, servicesLoader = pcall(function() 
-        return require(peglinRPG:WaitForChild("ServicesLoader")) 
-    end)
+    -- NUEVO: Probar la comunicación EventBus al inicializar
+    print("PeglinClient: Probando EventBus con mensaje de prueba...")
+    EventBus:Publish("TestEvent", "Prueba de inicialización")
+    print("PeglinClient: Evento de prueba enviado")
     
-    if servicesLoaderSuccess and servicesLoader then
-        print("PeglinClient: ServicesLoader encontrado, intentando iniciar servicios")
-        servicesLoader:LoadServices()
-        servicesLoader:InitializeServices()
-        servicesLoader:StartGame()
-    else
-        print("PeglinClient: Error al cargar ServicesLoader, intentando eventos directos")
-        EventBus:Publish("ClientReady")
-        EventBus:Publish("GameStarted")
-        EventBus:Publish("PlayerTurnStarted")
-    end   
-     print("PeglinClient: Evento ClientReady publicado")
-    
--- Añadir después del código anterior
--- Después de detectar que ServicesLoader fue encontrado, pero antes de llamar a LoadServices:
-print("PeglinClient: Intentando crear directamente un tablero básico")
-
--- Cargar directamente el BoardService
-local boardServicePath = peglinRPG:WaitForChild("Services"):WaitForChild("BoardService")
-local success, boardService = pcall(function()
-    return require(boardServicePath)
-end)
-
-if success and boardService then
-    -- Crear una instancia básica del servicio
-    local eventBusPath = peglinRPG:WaitForChild("Services"):WaitForChild("EventBus")
-    local eventBus = require(eventBusPath)
-    
-    -- Crear una implementación básica de serviceLocator
-    local basicServiceLocator = {
-        GetService = function() return nil end,
-        RegisterService = function() return nil end
-    }
-    
-    -- Crear instancia del BoardService
-    local boardServiceInstance = boardService.new(basicServiceLocator, eventBus)
-    
-    -- Inicializar
-    boardServiceInstance:Initialize()
-    
-    -- Generar un tablero simple
-    local boardConfig = {
-        theme = "FOREST",
-        pegColors = {
-            BrickColor.new("Bright blue"),
-            BrickColor.new("Bright green"),
-            BrickColor.new("Bright red")
-        }
-    }
-    
-    -- Intentar crear el tablero
-    print("PeglinClient: Generando tablero directamente")
-    boardServiceInstance:generateBoard(60, 70, 120, boardConfig)
-    
-    -- Cambiar el estado del juego para que los clics funcionen
+    -- Hacer funcionar inmediatamente para depuración
     isGameRunning = true
-    ui.label.Text = "¡Tablero generado! Haga clic para interactuar"
-    ui.label.BackgroundColor3 = Color3.fromRGB(30, 100, 30)
-else
-    print("PeglinClient: No se pudo cargar BoardService directamente:", boardService)
-end
-
--- Continuar con el intento normal (que probablemente fallará pero lo intentamos de todos modos)
-servicesLoader:LoadServices()
-
-
-
-    -- Forzar inicio de juego para depuración
-    print("PeglinClient: Intentando iniciar el juego directamente")
-    EventBus:Publish("GameStarted")
-    EventBus:Publish("PlayerTurnStarted")
+    
+    -- Solicitar inicio del juego
+    EventBus:Publish("ClientReady")
+    print("PeglinClient: Evento ClientReady publicado")
     
     return true
 end
