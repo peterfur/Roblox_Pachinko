@@ -34,7 +34,9 @@ function EffectsService:Initialize()
     
     -- Suscribirse a eventos
     table.insert(self.eventSubscriptions, self.eventBus:Subscribe("DamageDealt", function(amount, orbInstance, pegInstance)
-        self:showDamageNumber(pegInstance.Position, amount, orbInstance.criticalHits > 0)
+        if pegInstance and pegInstance.Position then
+            self:showDamageNumber(pegInstance.Position, amount, orbInstance and orbInstance.criticalHits and orbInstance.criticalHits > 0)
+        end
     end))
     
     table.insert(self.eventSubscriptions, self.eventBus:Subscribe("PlayerRevived", function()
@@ -258,7 +260,7 @@ function EffectsService:showOrbEffect(orbType, position)
     end
     
     -- Publicar evento de efecto mostrado
-    self.eventBus:Publish("EffectShown", "OrbEffect:" .. orbType, position)
+    self.eventBus:Publish("EffectShown", "OrbEffect:" .. tostring(orbType), position)
 end
 
 -- Muestra un efecto de resurrección

@@ -105,10 +105,22 @@ local function initialize()
     
     if not success or not result then
         warn("PeglinClient: No se pudo cargar EventBus: " .. tostring(result))
-        return false
+        
+        -- Intentar cargar de manera alternativa
+        success, result = pcall(function()
+            return require(peglinFolder:WaitForChild("Services"):WaitForChild("EventBus"))
+        end)
+        
+        if not success or not result then
+            warn("PeglinClient: Segundo intento fallido para EventBus: " .. tostring(result))
+            return false
+        end
+        
+        EventBus = result
+    else
+        EventBus = result
     end
     
-    EventBus = result
     print("PeglinClient: EventBus cargado correctamente")
     
     -- Crear interfaz de usuario
@@ -116,40 +128,52 @@ local function initialize()
     
     -- Suscribirse a eventos de estado del juego
     EventBus:Subscribe("GameStarted", function()
+        print("PeglinClient: Evento GameStarted recibido")
         isGameRunning = true
-        ui.label.Text = "¡Haga clic para lanzar un orbe!"
-        ui.label.BackgroundColor3 = Color3.fromRGB(30, 100, 30)
-        print("PeglinClient: Juego iniciado, esperando lanzamientos")
+        if ui and ui.label then
+            ui.label.Text = "¡Haga clic para lanzar un orbe!"
+            ui.label.BackgroundColor3 = Color3.fromRGB(30, 100, 30)
+        end
     end)
     
     EventBus:Subscribe("GameEnded", function()
         isGameRunning = false
-        ui.label.Text = "Juego terminado"
-        ui.label.BackgroundColor3 = Color3.fromRGB(100, 30, 30)
+        if ui and ui.label then
+            ui.label.Text = "Juego terminado"
+            ui.label.BackgroundColor3 = Color3.fromRGB(100, 30, 30)
+        end
     end)
     
     EventBus:Subscribe("PlayerTurnStarted", function()
+        print("PeglinClient: Evento PlayerTurnStarted recibido")
         launchReady = true
-        ui.label.Text = "¡Su turno! Haga clic para lanzar un orbe"
-        ui.label.BackgroundColor3 = Color3.fromRGB(30, 100, 30)
+        if ui and ui.label then
+            ui.label.Text = "¡Su turno! Haga clic para lanzar un orbe"
+            ui.label.BackgroundColor3 = Color3.fromRGB(30, 100, 30)
+        end
     end)
     
     EventBus:Subscribe("EnemyTurnStarted", function()
         launchReady = false
-        ui.label.Text = "Turno del enemigo..."
-        ui.label.BackgroundColor3 = Color3.fromRGB(100, 30, 30)
+        if ui and ui.label then
+            ui.label.Text = "Turno del enemigo..."
+            ui.label.BackgroundColor3 = Color3.fromRGB(100, 30, 30)
+        end
     end)
     
     EventBus:Subscribe("OrbLaunched", function()
+        print("PeglinClient: Evento OrbLaunched recibido")
         launchReady = false
-        ui.label.Text = "Orbe en movimiento..."
-        ui.label.BackgroundColor3 = Color3.fromRGB(30, 30, 100)
+        if ui and ui.label then
+            ui.label.Text = "Orbe en movimiento..."
+            ui.label.BackgroundColor3 = Color3.fromRGB(30, 30, 100)
+        end
         
         -- Programar recuperación del lanzamiento
         spawn(function()
             wait(orbLaunchCooldown)
             launchReady = true
-            if isGameRunning then
+            if isGameRunning and ui and ui.label then
                 ui.label.Text = "¡Listo para lanzar!"
                 ui.label.BackgroundColor3 = Color3.fromRGB(30, 100, 30)
             end
@@ -176,47 +200,60 @@ local function initialize()
             local directionX = (mousePosition.X - viewportSize.X/2) / (viewportSize.X/2)
             local directionY = (mousePosition.Y - viewportSize.Y/2) / (viewportSize.Y/2)
             
+            -- Limitar la dirección vertical para una mejor experiencia
+            directionY = math.min(0.5, math.max(-1, directionY))
+            
             -- La dirección estará entre -1 y 1 en ambos ejes, normalizar
             local direction = Vector3.new(directionX, -directionY, 0).Unit
             
-            -- NUEVO: Enviar evento de prueba para verificar comunicación
-            print("PeglinClient: Enviando evento de prueba...")
-            EventBus:Publish("TestEvent", "Mensaje de prueba desde cliente")
+            -- Logs para diagnóstico
+            print("PeglinClient: Dirección calculada:", direction)
             
-            -- NUEVO: Logs más detallados para verificar el evento de lanzamiento
-            print("PeglinClient: Publicando evento PlayerClickedToLaunch con dirección:", direction.X, direction.Y, direction.Z)
-            print("PeglinClient: EventBus disponible:", EventBus ~= nil)
-            
-            -- Publicar evento de lanzamiento con la dirección
+            -- Publicar evento para solicitar el lanzamiento
             EventBus:Publish("PlayerClickedToLaunch", direction)
             
             -- Feedback visual para el usuario
-            ui.label.Text = "¡Lanzando orbe!"
-            ui.label.BackgroundColor3 = Color3.fromRGB(30, 30, 100)
+            if ui and ui.label then
+                ui.label.Text = "¡Lanzando orbe!"
+                ui.label.BackgroundColor3 = Color3.fromRGB(30, 30, 100)
+            end
             
-            -- Simular la recepción del evento OrbLaunched
-            launchReady = false
-            
-            -- Programar recuperación del lanzamiento
+            -- Simular la recepción del evento OrbLaunched si no se recibe en un tiempo razonable
             spawn(function()
-                wait(orbLaunchCooldown)
-                launchReady = true
-                if isGameRunning and ui and ui.label then
-                    ui.label.Text = "¡Listo para lanzar!"
-                    ui.label.BackgroundColor3 = Color3.fromRGB(30, 100, 30)
+                local startTime = tick()
+                while launchReady and tick() - startTime < 1 do
+                    wait(0.1)
+                end
+                
+                if launchReady then
+                    -- No se recibió evento OrbLaunched, forzar estado
+                    launchReady = false
+                    print("PeglinClient: Forzando cambio de estado por timeout")
+                    
+                    -- Auto-recuperación
+                    spawn(function()
+                        wait(orbLaunchCooldown)
+                        launchReady = true
+                        if isGameRunning and ui and ui.label then
+                            ui.label.Text = "¡Listo para lanzar!"
+                            ui.label.BackgroundColor3 = Color3.fromRGB(30, 100, 30)
+                        end
+                    end)
                 end
             end)
         elseif isValidInput and not launchReady and isGameRunning then
-            ui.label.Text = "Espere un momento..."
-            -- Pequeño efecto visual para indicar que no puede lanzar aún
-            local originalColor = ui.label.BackgroundColor3
-            ui.label.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-            spawn(function()
-                wait(0.2)
-                if ui and ui.label then
-                    ui.label.BackgroundColor3 = originalColor
-                end
-            end)
+            if ui and ui.label then
+                ui.label.Text = "Espere un momento..."
+                -- Pequeño efecto visual para indicar que no puede lanzar aún
+                local originalColor = ui.label.BackgroundColor3
+                ui.label.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+                spawn(function()
+                    wait(0.2)
+                    if ui and ui.label then
+                        ui.label.BackgroundColor3 = originalColor
+                    end
+                end)
+            end
         end
     end)
     
@@ -224,17 +261,18 @@ local function initialize()
     isInitialized = true
     print("PeglinClient: Inicializado correctamente")
     
-    -- NUEVO: Probar la comunicación EventBus al inicializar
-    print("PeglinClient: Probando EventBus con mensaje de prueba...")
-    EventBus:Publish("TestEvent", "Prueba de inicialización")
-    print("PeglinClient: Evento de prueba enviado")
-    
-    -- Hacer funcionar inmediatamente para depuración
-    isGameRunning = true
-    
-    -- Solicitar inicio del juego
+    -- Publicar evento de cliente listo
     EventBus:Publish("ClientReady")
     print("PeglinClient: Evento ClientReady publicado")
+    
+    -- Forzar el inicio del juego para debugging
+    spawn(function()
+        wait(1)
+        if not isGameRunning then
+            print("PeglinClient: Forzando inicio del juego para debugging")
+            EventBus:Publish("GameStartRequested")
+        end
+    end)
     
     return true
 end
@@ -243,29 +281,52 @@ end
 local success = initialize()
 
 if not success then
-    warn("PeglinClient: No se pudo inicializar correctamente. Algunas características pueden no funcionar.")
+    warn("PeglinClient: No se pudo inicializar correctamente. Intentando método alternativo...")
     
-    -- Mostrar mensaje de error al usuario
-    local errorGui = Instance.new("ScreenGui")
-    errorGui.Name = "PeglinErrorUI"
-    
-    local errorFrame = Instance.new("Frame")
-    errorFrame.Size = UDim2.new(0, 300, 0, 100)
-    errorFrame.Position = UDim2.new(0.5, -150, 0.5, -50)
-    errorFrame.BackgroundColor3 = Color3.fromRGB(100, 30, 30)
-    errorFrame.BorderSizePixel = 2
-    
-    local errorText = Instance.new("TextLabel")
-    errorText.Size = UDim2.new(1, -20, 1, -20)
-    errorText.Position = UDim2.new(0, 10, 0, 10)
-    errorText.BackgroundTransparency = 1
-    errorText.TextColor3 = Color3.fromRGB(255, 255, 255)
-    errorText.Font = Enum.Font.SourceSansBold
-    errorText.TextSize = 16
-    errorText.Text = "Error de inicialización. Por favor, recargue el juego o contacte al desarrollador."
-    errorText.TextWrapped = true
-    errorText.Parent = errorFrame
-    
-    errorFrame.Parent = errorGui
-    errorGui.Parent = LOCAL_PLAYER:WaitForChild("PlayerGui")
+    -- Intento alternativo de inicialización
+    spawn(function()
+        wait(2) -- Esperar un poco
+        
+        -- Intentar cargar directamente el inicializador principal
+        local success, initializer = pcall(function()
+            return require(ReplicatedStorage:WaitForChild("PeglinRPG"):WaitForChild("PeglinRPG_Initializer"))
+        end)
+        
+        if success and initializer and typeof(initializer.Initialize) == "function" then
+            print("PeglinClient: Intentando inicialización alternativa mediante PeglinRPG_Initializer...")
+            initializer.Initialize()
+            
+            -- Configurar interfaz básica y cámara
+            setupCamera()
+            ui = createLaunchUI()
+            
+            -- Activar juego
+            isGameRunning = true
+            launchReady = true
+        else
+            -- Error crítico, mostrar mensaje al usuario
+            local errorGui = Instance.new("ScreenGui")
+            errorGui.Name = "PeglinErrorUI"
+            
+            local errorFrame = Instance.new("Frame")
+            errorFrame.Size = UDim2.new(0, 300, 0, 100)
+            errorFrame.Position = UDim2.new(0.5, -150, 0.5, -50)
+            errorFrame.BackgroundColor3 = Color3.fromRGB(100, 30, 30)
+            errorFrame.BorderSizePixel = 2
+            
+            local errorText = Instance.new("TextLabel")
+            errorText.Size = UDim2.new(1, -20, 1, -20)
+            errorText.Position = UDim2.new(0, 10, 0, 10)
+            errorText.BackgroundTransparency = 1
+            errorText.TextColor3 = Color3.fromRGB(255, 255, 255)
+            errorText.Font = Enum.Font.SourceSansBold
+            errorText.TextSize = 16
+            errorText.Text = "Error de inicialización. Por favor, recargue el juego o contacte al desarrollador."
+            errorText.TextWrapped = true
+            errorText.Parent = errorFrame
+            
+            errorFrame.Parent = errorGui
+            errorGui.Parent = LOCAL_PLAYER:WaitForChild("PlayerGui")
+        end
+    end)
 end

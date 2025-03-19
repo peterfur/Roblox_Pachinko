@@ -22,15 +22,10 @@ function ServicesLoader:LoadServices()
         CombatService = "Services.CombatService",
         PlayerService = "Services.PlayerService",
         EnemyService = "Services.EnemyService",
-        PhysicsService = "Services.PhysicsService",
-        VisualService = "Services.VisualService",
-        UIService = "Services.UIService",
         GameplayService = "Services.GameplayService",
         
         -- Servicios adicionales
-        EffectsService = "Services.EffectsService",
-        RewardService = "Services.RewardService",
-        InputService = "Services.InputService"
+        EffectsService = "Services.EffectsService", -- Asegurarse que está bien formateado
     }
     
     -- Lista de servicios que se han cargado correctamente
@@ -89,10 +84,33 @@ function ServicesLoader:ensureCriticalServices()
         if success and EnemyService then
             local enemyService = EnemyService.new(ServiceLocator, EventBus)
             ServiceLocator:RegisterService("EnemyService", enemyService)
-            enemyService:Initialize()
-            print("ServicesLoader: EnemyService básico creado e inicializado correctamente")
+            print("ServicesLoader: EnemyService básico creado correctamente")
         else
             warn("ServicesLoader: Error al cargar módulo EnemyService:", EnemyService)
+        end
+    end
+    
+    -- Verificar si EffectsService está disponible (especial handling por su estructura)
+    if not ServiceLocator:HasService("EffectsService") then
+        warn("ServicesLoader: EffectsService no encontrado, creando servicio básico")
+        
+        local success, EffectsService = pcall(function()
+            -- Probar primero como archivo directo
+            local module = ReplicatedStorage:FindFirstChild("PeglinRPG"):FindFirstChild("PeglinRPG_Initializer")
+            if module then
+                return require(module)
+            else
+                -- Si falla, intentar como carpeta
+                return require(ReplicatedStorage:WaitForChild("PeglinRPG"):WaitForChild("Services"):WaitForChild("EffectsService"))
+            end
+        end)
+        
+        if success and EffectsService then
+            local effectsService = EffectsService.new(ServiceLocator, EventBus)
+            ServiceLocator:RegisterService("EffectsService", effectsService)
+            print("ServicesLoader: EffectsService básico creado correctamente")
+        else
+            warn("ServicesLoader: Error al cargar módulo EffectsService:", EffectsService)
         end
     end
     
@@ -107,8 +125,7 @@ function ServicesLoader:ensureCriticalServices()
         if success and OrbService then
             local orbService = OrbService.new(ServiceLocator, EventBus)
             ServiceLocator:RegisterService("OrbService", orbService)
-            orbService:Initialize()
-            print("ServicesLoader: OrbService básico creado e inicializado correctamente")
+            print("ServicesLoader: OrbService básico creado correctamente")
         else
             warn("ServicesLoader: Error al cargar módulo OrbService:", OrbService)
         end
@@ -125,8 +142,7 @@ function ServicesLoader:ensureCriticalServices()
         if success and BoardService then
             local boardService = BoardService.new(ServiceLocator, EventBus)
             ServiceLocator:RegisterService("BoardService", boardService)
-            boardService:Initialize()
-            print("ServicesLoader: BoardService básico creado e inicializado correctamente")
+            print("ServicesLoader: BoardService básico creado correctamente")
         else
             warn("ServicesLoader: Error al cargar módulo BoardService:", BoardService)
         end
@@ -143,28 +159,9 @@ function ServicesLoader:ensureCriticalServices()
         if success and GameplayService then
             local gameplayService = GameplayService.new(ServiceLocator, EventBus)
             ServiceLocator:RegisterService("GameplayService", gameplayService)
-            gameplayService:Initialize()
-            print("ServicesLoader: GameplayService básico creado e inicializado correctamente")
+            print("ServicesLoader: GameplayService básico creado correctamente")
         else
             warn("ServicesLoader: Error al cargar módulo GameplayService:", GameplayService)
-        end
-    end
-    
-    -- Verificar si CombatService está disponible
-    if not ServiceLocator:HasService("CombatService") then
-        warn("ServicesLoader: CombatService no encontrado, creando servicio básico")
-        
-        local success, CombatService = pcall(function()
-            return require(ReplicatedStorage:WaitForChild("PeglinRPG"):WaitForChild("Services"):WaitForChild("CombatService"))
-        end)
-        
-        if success and CombatService then
-            local combatService = CombatService.new(ServiceLocator, EventBus)
-            ServiceLocator:RegisterService("CombatService", combatService)
-            combatService:Initialize()
-            print("ServicesLoader: CombatService básico creado e inicializado correctamente")
-        else
-            warn("ServicesLoader: Error al cargar módulo CombatService:", CombatService)
         end
     end
     
@@ -180,7 +177,19 @@ function ServicesLoader:InitializeServices()
     print("PeglinRPG: Inicializando servicios...")
     
     -- Llamar al método Initialize en todos los servicios registrados
-    ServiceLocator:InitializeAll()
+    for name, service in pairs(ServiceLocator:GetAllServices()) do
+        if type(service) == "table" and type(service.Initialize) == "function" then
+            local success, error = pcall(function()
+                service:Initialize()
+            end)
+            
+            if not success then
+                warn("ServiceLocator: Error al inicializar servicio " .. name .. ": " .. tostring(error))
+            else
+                print("ServiceLocator: Servicio inicializado: " .. name)
+            end
+        end
+    end
     
     -- Publicar evento de sistema inicializado
     EventBus:Publish("SystemInitialized")
@@ -190,6 +199,12 @@ function ServicesLoader:InitializeServices()
     -- Suscribirse al evento de inicio de juego
     EventBus:Subscribe("GameStartRequested", function()
         print("ServicesLoader: Evento GameStartRequested recibido, iniciando juego...")
+        self:StartGame()
+    end)
+    
+    -- Suscribirse al evento ClientReady
+    EventBus:Subscribe("ClientReady", function()
+        print("ServicesLoader: Evento ClientReady recibido, iniciando juego automáticamente...")
         self:StartGame()
     end)
 end
@@ -222,9 +237,21 @@ function ServicesLoader:StartGame()
     end
     
     -- Iniciar juego a través de GameplayService
-    gameplayService:StartNewGame()
+    local success, error = pcall(function()
+        gameplayService:StartNewGame()
+    end)
     
-    print("PeglinRPG: Juego iniciado correctamente mediante GameplayService")
+    if success then
+        print("PeglinRPG: Juego iniciado correctamente mediante GameplayService")
+    else
+        warn("PeglinRPG: Error al iniciar juego: " .. tostring(error))
+        -- Intentar iniciar el juego directamente a través de eventos como último recurso
+        EventBus:Publish("GameStarted", {currentPhase = "SETUP"})
+        EventBus:Publish("BoardRequested", 60, 70, 120, {theme = "FOREST"})
+        wait(1) -- Dar tiempo para que se genere el tablero
+        EventBus:Publish("PhaseChanged", "SETUP", "PLAYER_TURN")
+        EventBus:Publish("PlayerTurnStarted")
+    end
 end
 
 -- Método para hacer limpieza y detener todos los servicios

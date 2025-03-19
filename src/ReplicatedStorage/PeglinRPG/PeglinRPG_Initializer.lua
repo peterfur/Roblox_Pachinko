@@ -1,436 +1,80 @@
--- EffectsService.lua
--- Servicio que gestiona los efectos visuales y sonoros
--- Reemplaza al anterior EffectsManager con una arquitectura más estructurada
+-- PeglinRPG_Initializer.lua
+-- Punto de entrada refactorizado para la arquitectura actualizada
+-- Este script inicia todo el sistema y maneja la carga de servicios
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- Importar dependencias
-local ServiceInterface = require(ReplicatedStorage:WaitForChild("PeglinRPG"):WaitForChild("Services"):WaitForChild("ServiceInterface"))
-local Config = require(ReplicatedStorage:WaitForChild("PeglinRPG"):WaitForChild("Config"))
-
--- Definición del EffectsService
-local EffectsService = ServiceInterface:Extend("EffectsService")
-
--- Constructor
-function EffectsService.new(serviceLocator, eventBus)
-    local self = setmetatable({}, EffectsService)
+-- Iniciar carga del sistema de servicios
+local function InitializeGame()
+    print("PeglinRPG: Iniciando carga del sistema...")
     
-    -- Dependencias
-    self.serviceLocator = serviceLocator
-    self.eventBus = eventBus
-    
-    -- Propiedades
-    self.Name = "EffectsService"
-    
-    -- Subscripciones a eventos
-    self.eventSubscriptions = {}
-    
-    return self
-end
-
--- Inicialización del servicio
-function EffectsService:Initialize()
-    ServiceInterface.Initialize(self)
-    
-    -- Suscribirse a eventos
-    table.insert(self.eventSubscriptions, self.eventBus:Subscribe("DamageDealt", function(amount, orbInstance, pegInstance)
-        self:showDamageNumber(pegInstance.Position, amount, orbInstance.criticalHits > 0)
-    end))
-    
-    table.insert(self.eventSubscriptions, self.eventBus:Subscribe("PlayerRevived", function()
-        self:showResurrectionEffect()
-    end))
-    
-    print("EffectsService: Inicializado correctamente")
-end
-
--- Muestra un número de daño flotante
-function EffectsService:showDamageNumber(position, amount, isCritical, customMessage)
-    -- Crear el indicador visual
-    local damageText = Instance.new("BillboardGui")
-    damageText.Size = UDim2.new(0, 200, 0, 60)  -- Más grande para mayor visibilidad
-    damageText.StudsOffset = Vector3.new(0, 2, 0)
-    damageText.Adornee = nil -- No adjuntar a ningún objeto
-    damageText.AlwaysOnTop = true
-    damageText.MaxDistance = 100 -- Visible desde más lejos
-    damageText.Parent = workspace
-
-    -- Posicionar correctamente
-    local attachment = Instance.new("Attachment")
-    attachment.WorldPosition = position
-    attachment.Parent = workspace.Terrain
-    damageText.Adornee = attachment
-
-    -- Texto con el daño
-    local textLabel = Instance.new("TextLabel")
-    textLabel.Size = UDim2.new(1, 0, 1, 0)
-    textLabel.BackgroundTransparency = customMessage and 0.3 or 1  -- Fondo para mensajes personalizados
-    textLabel.BackgroundColor3 = customMessage and Color3.fromRGB(50, 50, 50) or Color3.fromRGB(0, 0, 0)
-    textLabel.TextScaled = true
-    textLabel.Font = Enum.Font.SourceSansBold
-    
-    -- Si hay mensaje personalizado, mostrarlo en lugar del daño
-    if customMessage then
-        textLabel.Text = customMessage
-        textLabel.TextColor3 = Color3.fromRGB(255, 255, 100) -- Amarillo para mensajes automáticos
-    else
-        textLabel.Text = tostring(amount)
-        
-        -- Color basado en la fuerza del daño/crítico
-        if isCritical then
-            textLabel.TextColor3 = Color3.fromRGB(255, 50, 50) -- Rojo para críticos
-            textLabel.Text = textLabel.Text .. "!"
-        else
-            textLabel.TextColor3 = Color3.fromRGB(255, 255, 255) -- Blanco para normal
-        end
-    end
-    
-    -- Añadir sombra del texto para mejor legibilidad
-    textLabel.TextStrokeTransparency = 0.5
-    textLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-
-    textLabel.Parent = damageText
-
-    -- Animación del texto de daño mejorada
-    spawn(function()
-        -- Seleccionar una dirección ligeramente aleatoria para más naturalidad
-        local xOffset = 0
-        if customMessage then
-            xOffset = 0
-        else
-            xOffset = math.random(-10, 10)
-        end
-        
-        for i = 1, 20 do
-            textLabel.Position = UDim2.new(0, xOffset * (i/10), 0, -i*2)
-            textLabel.TextTransparency = i / 20
-            
-            if not customMessage then
-                -- Efecto de escala para daño normal
-                local scale = 1 + (0.3 * (1 - i/20))
-                textLabel.Size = UDim2.new(scale, 0, scale, 0)
-            end
-            
-            if textLabel.BackgroundTransparency < 1 then
-                textLabel.BackgroundTransparency = textLabel.BackgroundTransparency + (i / 20)
-            end
-            
-            wait(0.05)
-        end
-        damageText:Destroy()
-        attachment:Destroy()
+    -- Cargar módulo ServicesLoader
+    local success, ServicesLoader = pcall(function()
+        return require(ReplicatedStorage:WaitForChild("PeglinRPG"):WaitForChild("ServicesLoader"))
     end)
     
-    -- Publicar evento de efecto mostrado
-    self.eventBus:Publish("EffectShown", "DamageNumber", position)
-end
-
--- Muestra efectos visuales según el tipo de orbe
-function EffectsService:showOrbEffect(orbType, position)
-    if orbType == "FIRE" then
-        -- Efecto de fuego
-        local fire = Instance.new("Fire")
-        fire.Heat = 10
-        fire.Size = 5
-        fire.Color = Color3.fromRGB(255, 100, 0)
-        fire.SecondaryColor = Color3.fromRGB(255, 200, 0)
-
-        local part = Instance.new("Part")
-        part.Anchored = true
-        part.CanCollide = false
-        part.Transparency = 1
-        part.Size = Vector3.new(1, 1, 1)
-        part.Position = position
-        fire.Parent = part
-        part.Parent = workspace
-
-        -- Eliminar después de un tiempo
-        game:GetService("Debris"):AddItem(part, 1.5)
-
-    elseif orbType == "ICE" then
-        -- Efecto de hielo
-        local part = Instance.new("Part")
-        part.Anchored = true
-        part.CanCollide = false
-        part.Transparency = 0.5
-        part.Size = Vector3.new(2, 2, 2)
-        part.Position = position
-        part.Color = Color3.fromRGB(100, 200, 255)
-        part.Material = Enum.Material.Ice
-        part.Parent = workspace
-
-        -- Partículas de hielo
-        local attachment = Instance.new("Attachment")
-        attachment.Parent = part
-
-        local particles = Instance.new("ParticleEmitter")
-        particles.Color = ColorSequence.new(Color3.fromRGB(200, 240, 255))
-        particles.Size = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.5),
-            NumberSequenceKeypoint.new(1, 0)
-        })
-        particles.Lifetime = NumberRange.new(0.5, 1)
-        particles.Rate = 50
-        particles.Speed = NumberRange.new(3, 5)
-        particles.SpreadAngle = Vector2.new(180, 180)
-        particles.Parent = attachment
-
-        -- Desvanecimiento gradual
+    if not success then
+        warn("PeglinRPG: Error al cargar ServicesLoader:", ServicesLoader)
+        return false
+    end
+    
+    print("PeglinRPG: ServicesLoader cargado correctamente")
+    
+    -- Cargar servicios principales
+    local loadedServices = ServicesLoader:LoadServices()
+    if #loadedServices == 0 then
+        warn("PeglinRPG: No se pudo cargar ningún servicio")
+        return false
+    end
+    
+    -- Inicializar servicios
+    ServicesLoader:InitializeServices()
+    
+    -- Configurar evento para iniciar el juego desde el cliente
+    local EventBus = require(ReplicatedStorage:WaitForChild("PeglinRPG"):WaitForChild("Services"):WaitForChild("EventBus"))
+    EventBus:Subscribe("ClientReady", function()
+        print("PeglinRPG: Cliente listo, iniciando juego...")
+        ServicesLoader:StartGame()
+    end)
+    
+    -- Comando de inicio manual para testing
+    if game:GetService("RunService"):IsStudio() then
+        -- Iniciar juego automáticamente en Studio para facilitar el testing
+        print("PeglinRPG: Modo Studio detectado, iniciando juego automáticamente en 2 segundos...")
         spawn(function()
-            for i = 1, 10 do
-                part.Transparency = 0.5 + (i * 0.05)
-                wait(0.1)
-            end
-            part:Destroy()
-        end)
-
-    elseif orbType == "LIGHTNING" then
-        -- Efecto de rayo
-        for i = 1, 3 do
-            local startPos = position
-            local endPos = position + Vector3.new(math.random(-5, 5), math.random(-5, 5), math.random(-2, 2))
-
-            local bolt = Instance.new("Beam")
-            local a0 = Instance.new("Attachment")
-            local a1 = Instance.new("Attachment")
-
-            -- Crear partes para los attachments
-            local p0 = Instance.new("Part")
-            p0.Anchored = true
-            p0.CanCollide = false
-            p0.Transparency = 1
-            p0.Position = startPos
-            p0.Parent = workspace
-
-            local p1 = Instance.new("Part")
-            p1.Anchored = true
-            p1.CanCollide = false
-            p1.Transparency = 1
-            p1.Position = endPos
-            p1.Parent = workspace
-
-            a0.Parent = p0
-            a1.Parent = p1
-
-            bolt.Attachment0 = a0
-            bolt.Attachment1 = a1
-            bolt.Width0 = 0.5
-            bolt.Width1 = 0.2
-            bolt.LightEmission = 1
-            bolt.FaceCamera = true
-            bolt.Texture = "rbxassetid://446111271"
-            bolt.TextureLength = 0.5
-            bolt.TextureSpeed = 2
-            bolt.Color = ColorSequence.new(Color3.fromRGB(150, 150, 255))
-            bolt.Parent = workspace
-
-            -- Eliminar después de un tiempo
-            spawn(function()
-                wait(0.3)
-                bolt:Destroy()
-                p0:Destroy()
-                p1:Destroy()
-            end)
-        end
-
-    elseif orbType == "VOID" then
-        -- Efecto de vacío
-        local part = Instance.new("Part")
-        part.Shape = Enum.PartType.Ball
-        part.Anchored = true
-        part.CanCollide = false
-        part.Transparency = 0.3
-        part.Size = Vector3.new(3, 3, 3)
-        part.Position = position
-        part.Color = Color3.fromRGB(100, 0, 100)
-        part.Material = Enum.Material.Neon
-        part.Parent = workspace
-
-        -- Animación de implosión
-        spawn(function()
-            for i = 1, 10 do
-                part.Size = Vector3.new(3 - i*0.25, 3 - i*0.25, 3 - i*0.25)
-                part.Transparency = 0.3 + (i * 0.07)
-                wait(0.05)
-            end
-            part:Destroy()
+            wait(2)
+            ServicesLoader:StartGame()
         end)
     end
     
-    -- Publicar evento de efecto mostrado
-    self.eventBus:Publish("EffectShown", "OrbEffect:" .. orbType, position)
+    print("PeglinRPG: Sistema inicializado correctamente")
+    return true
 end
 
--- Muestra un efecto de resurrección
-function EffectsService:showResurrectionEffect()
-    -- Efecto de resurrección para el jugador
-    local effect = Instance.new("Part")
-    effect.Shape = Enum.PartType.Ball
-    effect.Size = Vector3.new(10, 10, 10)
-    effect.Position = Vector3.new(0, 5, 0) -- Posición del jugador
-    effect.Anchored = true
-    effect.CanCollide = false
-    effect.Transparency = 0.5
-    effect.Color = Color3.fromRGB(255, 200, 100)
-    effect.Material = Enum.Material.Neon
-    effect.Parent = workspace
+-- Ejecutar inicialización con manejo de errores
+local success, result = pcall(InitializeGame)
 
-    -- Partículas
-    local attachment = Instance.new("Attachment")
-    attachment.Parent = effect
-
-    local particles = Instance.new("ParticleEmitter")
-    particles.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 200, 100)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 150, 0))
-    })
-    particles.Size = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 1),
-        NumberSequenceKeypoint.new(1, 0)
-    })
-    particles.Lifetime = NumberRange.new(1, 2)
-    particles.Rate = 100
-    particles.Speed = NumberRange.new(10, 15)
-    particles.SpreadAngle = Vector2.new(180, 180)
-    particles.Parent = attachment
-
-    -- Animación de expansión y desaparición
+if not success then
+    warn("PeglinRPG: Error crítico durante la inicialización:", result)
+    
+    -- Realizar intento de recuperación básico
     spawn(function()
-        for i = 1, 10 do
-            effect.Size = Vector3.new(10 + i, 10 + i, 10 + i)
-            effect.Transparency = 0.5 + (i * 0.05)
-            wait(0.1)
-        end
-        effect:Destroy()
-    end)
-
-    -- Mostrar mensaje
-    local message = Instance.new("BillboardGui")
-    message.Size = UDim2.new(0, 300, 0, 100)
-    message.StudsOffset = Vector3.new(0, 10, 0)
-    message.Adornee = workspace.Terrain
-    message.AlwaysOnTop = true
-
-    local textLabel = Instance.new("TextLabel")
-    textLabel.Size = UDim2.new(1, 0, 1, 0)
-    textLabel.BackgroundTransparency = 0.5
-    textLabel.BackgroundColor3 = Color3.fromRGB(50, 0, 0)
-    textLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
-    textLabel.Font = Enum.Font.SourceSansBold
-    textLabel.TextSize = 24
-    textLabel.Text = "¡RESURRECCIÓN!"
-    textLabel.Parent = message
-
-    message.Parent = workspace
-
-    spawn(function()
-        wait(3)
-        message:Destroy()
-    end)
-    
-    -- Publicar evento de efecto mostrado
-    self.eventBus:Publish("EffectShown", "ResurrectionEffect", Vector3.new(0, 5, 0))
-end
-
--- Muestra efecto de victoria sobre un enemigo
-function EffectsService:showVictoryEffect(enemyPosition)
-    -- Mensaje de victoria
-    local victoryMessage = Instance.new("BillboardGui")
-    victoryMessage.Size = UDim2.new(0, 500, 0, 120)
-    victoryMessage.StudsOffset = Vector3.new(0, 0, 0)
-    victoryMessage.Adornee = workspace.Terrain
-    victoryMessage.AlwaysOnTop = true
-
-    local textLabel = Instance.new("TextLabel")
-    textLabel.Size = UDim2.new(1, 0, 1, 0)
-    textLabel.BackgroundTransparency = 0.3
-    textLabel.BackgroundColor3 = Color3.fromRGB(0, 80, 0)
-    textLabel.TextColor3 = Color3.fromRGB(120, 255, 120)
-    textLabel.Font = Enum.Font.SourceSansBold
-    textLabel.TextSize = 48
-    textLabel.Text = "¡VICTORIA!"
-    textLabel.Parent = victoryMessage
-
-    victoryMessage.Parent = workspace
-
-    -- Reproducir sonido de victoria
-    local victorySound = Instance.new("Sound")
-    victorySound.SoundId = "rbxassetid://9120903079" -- Sonido de victoria
-    victorySound.Volume = 0.8
-    victorySound.Parent = workspace
-    victorySound:Play()
-
-    -- Animar mensaje
-    spawn(function()
-        for i = 1, 10 do
-            victoryMessage.StudsOffset = Vector3.new(0, i, 0)
-            wait(0.1)
-        end
-
-        wait(1)
-
-        for i = 10, 1, -1 do
-            victoryMessage.StudsOffset = Vector3.new(0, i, 0)
-            wait(0.05)
-        end
-
-        victoryMessage:Destroy()
-    end)
-    
-    -- Partículas de celebración
-    local celebrationEffect = Instance.new("Part")
-    celebrationEffect.Anchored = true
-    celebrationEffect.CanCollide = false
-    celebrationEffect.Transparency = 1
-    celebrationEffect.Position = enemyPosition + Vector3.new(0, 3, 0)
-    celebrationEffect.Size = Vector3.new(1, 1, 1)
-    celebrationEffect.Parent = workspace
-    
-    local attachment = Instance.new("Attachment")
-    attachment.Parent = celebrationEffect
-    
-    local particles = Instance.new("ParticleEmitter")
-    particles.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 0)),
-        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 255, 0)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 200, 255))
-    })
-    particles.Size = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 0.5),
-        NumberSequenceKeypoint.new(0.5, 1),
-        NumberSequenceKeypoint.new(1, 0)
-    })
-    particles.Texture = "rbxassetid://241684362" -- Textura de estrella
-    particles.Lifetime = NumberRange.new(1, 2)
-    particles.Rate = 30
-    particles.Speed = NumberRange.new(10, 20)
-    particles.SpreadAngle = Vector2.new(180, 180)
-    particles.Parent = attachment
-    
-    -- Auto-destrucción
-    spawn(function()
-        wait(5)
-        particles.Enabled = false
+        print("PeglinRPG: Intentando recuperación básica...")
         wait(2)
-        celebrationEffect:Destroy()
+        
+        -- Iniciar directamente con eventos simplificados
+        local EventBus = require(ReplicatedStorage:WaitForChild("PeglinRPG"):WaitForChild("Services"):WaitForChild("EventBus"))
+        EventBus:Publish("GameStarted", {currentPhase = "SETUP"})
+        wait(0.5)
+        EventBus:Publish("BoardRequested", 60, 70, 120, {theme = "FOREST"})
+        wait(0.5)
+        EventBus:Publish("PhaseChanged", "SETUP", "PLAYER_TURN")
+        EventBus:Publish("PlayerTurnStarted")
+        
+        print("PeglinRPG: Recuperación básica completada")
     end)
-    
-    -- Publicar evento de efecto mostrado
-    self.eventBus:Publish("EffectShown", "VictoryEffect", enemyPosition)
 end
 
--- Limpieza del servicio
-function EffectsService:Cleanup()
-    -- Cancelar todas las suscripciones a eventos
-    for _, unsubscribe in ipairs(self.eventSubscriptions) do
-        if type(unsubscribe) == "function" then
-            unsubscribe()
-        end
-    end
-    self.eventSubscriptions = {}
-    
-    -- Llamar al método Cleanup de la clase base
-    ServiceInterface.Cleanup(self)
-end
-
-return EffectsService
+return {
+    Initialize = InitializeGame -- Exponer la función para llamadas externas
+}
